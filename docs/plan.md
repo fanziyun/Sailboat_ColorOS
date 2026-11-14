@@ -18,6 +18,13 @@
 - 与 5.15 WALT 对接（ux_task 优先级、im_flag 输入加速、scene 切换）。
 - 在设备上 insmod，核对节点与 `dumpsys` 行为，跑一轮 A/B 实测。
 
+**进展（2026-11-15）**：缺口分析完成，结论与证据见 `port/sched_assist/README.md`。
+
+- 依赖面全满足：26 个 hook 真机全有、113 个导入符号真机全导出、`task_struct`/`struct rq` 布局与 DDK 逐字段一致。
+- 真机已跑通一版：`insmod` rc=0，9 个节点齐全，`ux_task` 写读回 `ux_state=0x2`，无内核告警。
+- 两个硬约束改变了原方案：`task_struct.android_oem_data1[0]` 与 `[1]` 已被小米调度栈占用（0 号槽是毒值 `0xabcdabcdacbdadbc`），`OTS_IDX` 必须改；`rmmod` 不可用（无 `module_exit`，且 rvh hook 无法注销），「insmod/rmmod 迭代」不成立。
+- 本机 `CONFIG_SCHED_WALT` 未置位，WALT 是独立模块 `sched_walt`，WALT 相关分支不会编入。
+
 ### P2 frame_boost + uad
 
 - `frame_boost`（AFS）与 `uad`（`touch_boost`、`ua_ioctl`）。
