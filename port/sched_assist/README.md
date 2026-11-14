@@ -2,7 +2,7 @@
 
 适用：vermeer（SM8550）`5.15.223-Sailboat-20261105`，ColorOS 17 移植（Android 17 / SDK 37）。
 
-目标节点：`/proc/oplus_scheduler/sched_assist/*`。
+目标节点：`/proc/oplus_scheduler/sched_assist/*`，完整清单与格式见 [`docs/接口-oplus_scheduler.md`](../../docs/接口-oplus_scheduler.md)。
 
 | 节点 | 权限 | 作用 |
 |---|---|---|
@@ -96,23 +96,33 @@ DDK `vmlinux` 的 BTF 与真机 `/sys/kernel/btf/vmlinux` 逐字段比对（`pah
 | `sa_common.h` | `OTS_IDX` 0 → 2 |
 | `sa_common.c` | `frame_group.h` 的 `<>` 包含改为同目录 `""` 包含（上游用 `<../kernel/oplus_cpu/...>`，指向 OnePlus 树内相对路径） |
 | `sa_fair.c` | 同上 |
-| 新增 `Makefile` | 8 个对象、`-I$(srctree)/ -I$(srctree)/kernel/sched -I$(src)` |
+| `sa_sysfs.c` | 加 `#include "sailboat_coloros_nodes.h"`，并在建完 `sched_assist` 目录后调用 `sailboat_coloros_nodes_proc_init()` |
+| 新增 `sailboat_coloros_nodes.c/.h` | 补 5 个 HAL 需要但 5.15 源码没有的节点 + `/proc/sys/kernel/sched_assist_scene` |
+| 新增 `Makefile` | 9 个对象、`-I$(srctree)/ -I$(srctree)/kernel/sched -I$(src)` |
 
-以上四处在 `scripts/wsl/probe_sched_assist.sh` 里以脚本方式固化，可直接复现。
+以上改动都在 `scripts/wsl/build_sched_assist.sh` 里以脚本方式固化（锚点找不到会直接失败），可直接复现。
 
 ## 构建
 
 ```bash
-MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-26.04 -- bash /mnt/h/Sailboat_ColorOS/scripts/wsl/probe_sched_assist.sh
+MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-26.04 -- bash /mnt/h/Sailboat_ColorOS/scripts/wsl/build_sched_assist.sh
 ```
 
-脚本从 `src_upstream/oplus_sm8550` 取源码、落 `out/probe/sa/`、打上面两个补丁，再用 DDK 5.15.202 + clang r450784e 编：
+脚本从 `src_upstream/oplus_sm8550` 取源码、落 `out/build/sched_assist/`、叠加 `port/sched_assist/src/` 下的新增文件，再按锚点打补丁，最后用 DDK 5.15.202 + clang r450784e 编：
 
 ```
-make -C <ddk>/opt/ddk/kdir/android13-5.15 M=<repo>/out/probe/sa ARCH=arm64 LLVM=1 PAHOLE=true modules
+make -C <ddk>/opt/ddk/kdir/android13-5.15 M=<repo>/out/build/sched_assist ARCH=arm64 LLVM=1 PAHOLE=true modules
 ```
 
-产物 `sa_probe.ko`：2.9 MB，vermagic `5.15.202-android13-5.15.202_r00-dirty`，LTO thin。
+产物 `sail_sched_assist.ko`：3.1 MB，vermagic `5.15.202-android13-5.15.202_r00-dirty`，LTO thin。
+
+打包成 KernelSU 模块：
+
+```bash
+bash scripts/package_ksu.sh
+```
+
+产物在 `out/ksu/sailboat_oppo_perf/`，整目录推到 `/data/adb/modules/sailboat_oppo_perf/` 即可，开机时 `service.sh` 自动 `insmod`。
 
 ## 验证记录
 
@@ -122,10 +132,16 @@ make -C <ddk>/opt/ddk/kdir/android13-5.15 M=<repo>/out/probe/sa ARCH=arm64 LLVM=
 |---|---|
 | `insmod` | `rc=0`，无 `disagrees about version of symbol`、无 `Unknown symbol` |
 | 模块日志 | `[sched_assist][oplus_sched_assist_init]sched assist init succeed!` |
-| proc 节点 | `/proc/oplus_scheduler/sched_assist/` 下 9 个节点全部出现：`debug_enabled`、`im_flag`、`im_flag_app`、`lowend_plat_opt`、`sched_assist_enabled`、`sched_assist_scene`、`sched_impt_task`、`ux_task`、`ux_task_app` |
-| 写路径 | `echo "p <pid> 130" > ux_task` 后 `r <pid>` 读回 `ux_state=0x00000002`、`ux_prio=0`、`ux_nice=7`；`p <pid> 0` 清除成功 |
-| 内核告警 | 加载及操作期间 `dmesg` 中 `WARNING:` / `BUG:` / `Unable to handle` 计数为 0 |
+| proc 节点 | 15 个全部出现：`ux_task`、`ux_task_app`、`im_flag`、`im_flag_app`、`sched_assist_scene`、`sched_assist_enabled`、`sched_impt_task`、`lowend_plat_opt`、`debug_enabled`、`disable_setting`、`sched_prop`、`tpd_cmds`、`tpd_id`、`audio/enable` |
+| sysctl | `/proc/sys/kernel/sched_assist_scene` 存在，与 proc 节点共用同一变量（写 2 → 节点读回 `scene=2`，写 0 → `scene=0`） |
+| `ux_task` 写路径 | `p <pid> 130` 后 `r <pid>` 读回 `ux_state=0x00000002`、`ux_prio=0`、`ux_nice=7`；`p <pid> 0` 清除成功 |
+| 新增 5 个节点 | `audio/enable` 写 1 读回 `enabled=1`、写 0 读回 `enabled=0`；`disable_setting` 默认 1；`sched_prop`、`tpd_cmds`、`tpd_id` 写入 `0 32` / `p 1234 5` / `77` 后原样回显 |
+| 内核告警 | 本轮开机到加载期间 `dmesg` 里 `WARNING:`/`BUG:`/`Unable to handle` 共 12 条，时间戳全部落在 0.7–24s（`spmi-pmic-arb`、`linkerconfig`、`page_alloc`、`device_links` 与一条 eBPF 提示），模块在 83s 才加载，**没有一条与 sched_assist 相关** |
 | `rmmod` | **失败**（`Device or resource busy`），见下节 |
+| KSU 模块 | 已安装到 `/data/adb/modules/sailboat_oppo_perf/`，`service.sh` 开机自动 `insmod lib/modules/sail_sched_assist.ko` |
+
+注意：加载一次之后本机就到下一轮重启才能换版本，所以每次迭代都要先确认新 `.ko` 再 `insmod`。
+
 
 ## 关键限制
 
@@ -135,9 +151,12 @@ make -C <ddk>/opt/ddk/kdir/android13-5.15 M=<repo>/out/probe/sa ARCH=arm64 LLVM=
 
 ## 未完成
 
+- [x] 补 5 个 HAL 需要的节点（`audio/enable`、`disable_setting`、`sched_prop`、`tpd_cmds`、`tpd_id`）与 `/proc/sys/kernel/sched_assist_scene`
+- [ ] 这 5 个节点的后端逻辑：`audio/enable` 接 `sa_audio`、`disable_setting` 接 `ux_task` 的 uid 门禁、`sched_prop` / `tpd_*` 的真实格式（需要从 ROM 的 6.18 sched_assist.ko 反编译确认）
 - [ ] `OTS_IDX` 的取值写进 `src/`（2–5 的最终选择）；`get_oplus_task_struct()` 增加毒值/回指校验，不依赖 `IS_ERR_OR_NULL`。
 - [ ] 加 `module_exit` + 每个 hook 入口的 `sa_module_loaded` 闸门，让「卸载后空转」可行。
 - [ ] `sched_assist_enabled=1` 后的稳定性与 A/B（先只读一轮，再开 ux）。
 - [ ] `sa_audio` / `sched_assist_locking` / `sa_pipeline` / `sa_balance` 四个配置块逐个接入（`sa_balance` 4.5k 行，风险最高，放最后）。
-- [ ] HAL 侧核对：`/odm/bin/hw/vendor-oplus-hardware-performance-V1-service` 日志里 open 失败是否消失。
+- [ ] HAL 侧核对：`/odm/bin/hw/vendor-oplus-hardware-performance-V1-service` 日志里 sched_assist 相关 open 失败是否消失。
 - [ ] 与 `sched_walt`/`metis` 的交互：确认 `tti`、`migt` 等同机调度模块不读 `android_oem_data1[2..5]`。
+

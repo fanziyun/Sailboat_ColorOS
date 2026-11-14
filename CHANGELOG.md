@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-11-15
+
+- 补齐 ColorOS 性能 HAL 需要的 5 个节点：`audio/enable`、`disable_setting`、`sched_prop`、`tpd_cmds`、`tpd_id`，以及 `/proc/sys/kernel/sched_assist_scene`。
+- 新增 `docs/接口-oplus_scheduler.md`：15 个节点与 1 个 sysctl 的路径、权限、格式、语义与实现状态。
+- 新增 `port/sched_assist/src/sailboat_coloros_nodes.c`：占位实现，接受写入并回显，保证 HAL 的 open/write 不再失败。
+- `scripts/wsl/probe_sched_assist.sh` 改为 `build_sched_assist.sh`，产物更名 `sail_sched_assist.ko`；新增 `scripts/package_ksu.sh`。
+- 真机验证：15 个节点齐全、5 个新节点读写正常、sysctl 与 proc 节点共用状态；KSU 模块已安装到 `/data/adb/modules/sailboat_oppo_perf/`。
+
 ## 0.2.0 — 2026-11-15
 
 - sched_assist 缺口分析完成（`port/sched_assist/README.md`）：26 个 hook、113 个导入符号、结构体布局全部对齐 5.15.223-Sailboat。
