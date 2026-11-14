@@ -1,0 +1,19 @@
+# build outputs
+out/
+*.ko
+*.o
+*.mod
+*.mod.c
+.tmp_versions/
+modules.order
+Module.symvers
+modules.builtin
+
+# fetched upstream trees
+src_upstream/
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
