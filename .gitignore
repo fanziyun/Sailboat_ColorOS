@@ -17,3 +17,6 @@ src_upstream/
 .idea/
 .DS_Store
 Thumbs.db
+
+# kbuild per-target cmd files
+.*.cmd

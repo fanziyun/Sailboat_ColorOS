@@ -1,1 +1,0 @@
-cmd_/mnt/h/Sailboat_ColorOS/tools/hello/Module.symvers := sed 's/\.ko$$/.lto\.o/' /mnt/h/Sailboat_ColorOS/tools/hello/modules.order | scripts/mod/modpost -m  -E -o /mnt/h/Sailboat_ColorOS/tools/hello/Module.symvers -e -v gd3c0a5f3e535 -i Module.symvers   -n -T -
