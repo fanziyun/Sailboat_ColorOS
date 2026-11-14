@@ -2,13 +2,15 @@
 
 ## 阶段
 
-### P0 环境与可行性（进行中）
+### P0 环境与可行性（已完成，2026-11-15）
 
-1. WSL 复现与 Sailboat 内核同源的构建环境：`android13-5.15-lts` @ 5.15.223 + `kernel/prebuilts/build-tools@main-kernel-build-2024` 的 clang。
-2. modversions 冒烟测试：编译 `tools/hello` 的 .ko，insmod 进真机。
-   - 通过 → 本地迭代路线成立。
-   - 不通过 → 先对齐 config/补丁（ABK 构建时的 graft 与 SUSFS/KSU 补丁），或用 ABK Actions 产出的同树产物。
-3. 拉取 OPPO 6.18/5.15 源码（`scripts/fetch_upstream.sh`）。
+1. 结论：**DDK `android13-5.15-20260313`（5.15.202）编出的 `.ko` 可以直接在 5.15.223-Sailboat 真机上 `insmod`**。冒烟测试 `tools/hello`：
+   - vermagic `5.15.202-android13-5.15.202_r00-dirty`、带 `__versions`；
+   - 设备 `CONFIG_MODVERSIONS=y`、`CONFIG_MODULE_SIG_FORCE` 与 `CONFIG_MODULE_FORCE_LOAD` 都未开启；
+   - `insmod` 返回 0，`dmesg` 有 `sailboat_hello: loaded`，`lsmod` 可见，`rmmod` 干净。
+2. 构建方式（WSL）：`scripts/wsl/hello_ddk.sh`，`make -C <DDK kdir> M=<模块> ARCH=arm64 LLVM=1 PAHOLE=true modules`（DDK 未带 pahole，`PAHOLE=true` 跳过 BTF；模块运行不需要 BTF）。
+3. 风险收敛：跨 sublevel 可加载，但符号 CRC 仍以实际使用为准；后续每加一个符号都要过真机加载验证。若出现 CRC 不匹配，再按 ABK 构建产物对齐 `Module.symvers`。
+4. 拉取 OPPO 6.18/5.15 源码（`scripts/fetch_upstream.sh`，后台执行）。
 
 ### P1 sched_assist
 

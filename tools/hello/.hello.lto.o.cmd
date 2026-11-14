@@ -1,0 +1,1 @@
+cmd_/mnt/h/Sailboat_ColorOS/tools/hello/hello.lto.o := ld.lld -EL  -maarch64elf -z norelro -mllvm -import-instr-limit=5 -z noexecstack   -r -o /mnt/h/Sailboat_ColorOS/tools/hello/hello.lto.o  --whole-archive /mnt/h/Sailboat_ColorOS/tools/hello/hello.o

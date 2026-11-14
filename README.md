@@ -5,6 +5,7 @@
 ## 现状
 
 - 2026-11-15 开荒。设备：vermeer（SM8550/kalama），内核 `5.15.223-Sailboat-20261105`，系统为的一加 16 `PYB110` ColorOS 17 移植。
+- P0 已通过：DDK `android13-5.15-20260313`（5.15.202）编出的 `.ko` 在 5.15.223 真机上可正常 `insmod`/`rmmod`（见 `docs/plan.md` P0），本地迭代路线成立。
 - 一加 16 原版上的这些模块是 6.18（`6.18.21-android17-5-o`）形态，vermagic/modversions 与 5.15 不兼容，不能直接加载（结论见 `docs/sources.md` 与 c17 项目 `docs/一加16-vendor_dlkm内核模块核对-ColorOS17.md`）。
 - 本仓库按阶段推进：**先 KSU 模块带预编译 .ko 试水（insmod/rmmod 迭代），稳定后转 ABK module_set 并入内核构建固化**。
 
