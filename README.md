@@ -19,6 +19,14 @@
 
 `sched_info`（`/proc/jank_info`、`/proc/oplus_healthinfo` 只读指标）第二阶段再加。
 
+## 用户态优化组件
+
+按用户 2026-11-15 的决定：**只要是优化就迁移保留**，实测收益不作为去留门槛。
+
+| 组件 | 状态 | 说明 |
+|---|---|---|
+| `components/Sail_FrameBoost` | 已迁移（源码 + 工具） | 触摸按下抬 kgsl `min_pwrlevel`、覆盖桌面开应用转场；用户态守护进程，随 KSU 模块装载 |
+
 ## 源码原则
 
 以 OnePlusOSS 开源源码为主：主参照 6.18 一加 16 的 sm8850 vendor 模块树，5.15 一加 11 的 sm8550 树作为同内核代的可移植实现参考；闭源私有实现只能从 .ko 反编译补充。详见 [docs/sources.md](docs/sources.md)。

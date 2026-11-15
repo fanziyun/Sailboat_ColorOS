@@ -20,3 +20,7 @@ Thumbs.db
 
 # kbuild per-target cmd files
 .*.cmd
+
+# junk
+*.stackdump
+frameboost/

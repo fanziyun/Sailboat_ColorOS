@@ -1,0 +1,6 @@
+service Sail_FrameBoost /system_ext/bin/Sail_FrameBoost
+    class main
+    user root
+    group system input
+    restart_period 5
+    seclabel u:r:Sail_FrameBoost:s0

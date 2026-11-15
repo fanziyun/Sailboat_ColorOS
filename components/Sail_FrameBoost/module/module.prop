@@ -1,0 +1,6 @@
+id=Sail_FrameBoost
+name=Sail_FrameBoost
+description=Touch-triggered GPU floor boost for app launch transitions + SystemUI jank watcher
+version=v2
+versionCode=2
+author=Sail

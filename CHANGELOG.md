@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-11-15
+
+- 迁入用户态优化组件 `components/Sail_FrameBoost`（源码、工具、KSU 模块配置）；按用户决定：优化类组件即使实测无可测收益也迁移保留。
+- README 增加「用户态优化组件」一节；`.gitignore` 忽略 `*.stackdump`。
+
 ## 0.3.0 — 2026-11-15
 
 - 补齐 ColorOS 性能 HAL 需要的 5 个节点：`audio/enable`、`disable_setting`、`sched_prop`、`tpd_cmds`、`tpd_id`，以及 `/proc/sys/kernel/sched_assist_scene`。
