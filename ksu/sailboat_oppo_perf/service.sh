@@ -24,3 +24,7 @@ insmod_dir() {
 
 mkdir -p "$MODDIR/lib/modules"
 insmod_dir "$MODDIR/lib/modules"
+
+if [ -f "$MODDIR/enable_frameboost" ] && [ -x "$MODDIR/bin/Sail_FrameBoost" ]; then
+  "$MODDIR/bin/Sail_FrameBoost" >/dev/null 2>&1 &
+fi

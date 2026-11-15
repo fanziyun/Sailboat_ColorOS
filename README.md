@@ -25,7 +25,7 @@
 
 | 组件 | 状态 | 说明 |
 |---|---|---|
-| `components/Sail_FrameBoost` | 已迁移（源码 + 工具） | 触摸按下抬 kgsl `min_pwrlevel`、覆盖桌面开应用转场；用户态守护进程，随 KSU 模块装载 |
+| `components/Sail_FrameBoost` | 已迁移（源码 + 工具） | 触摸按下抬 kgsl `min_pwrlevel`、覆盖桌面开应用转场；用户态守护进程，随 KSU 模块打包，默认不自启（模块目录放 `enable_frameboost` 才开机启动，或 `action.sh fb-start` 手动起） |
 
 ## 源码原则
 
