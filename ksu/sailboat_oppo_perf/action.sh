@@ -37,6 +37,15 @@ case "$cmd" in
     sh "$MODDIR/boost.sh" on "$1"
     sh "$MODDIR/boost.sh" status
     ;;
+  boost-guard)
+    pkill -f "boost.sh guard" 2>/dev/null
+    sh "$MODDIR/boost.sh" guard &
+    echo "guard started"
+    ;;
+  boost-guard-stop)
+    pkill -f "boost.sh guard" 2>/dev/null
+    echo "guard stopped"
+    ;;
   boost-off)
     sh "$MODDIR/boost.sh" off
     sh "$MODDIR/boost.sh" status
@@ -46,6 +55,6 @@ case "$cmd" in
     echo "tested"
     ;;
   *)
-    echo "usage: action.sh [status|load|fb-start|fb-stop|boost-on <light|standard|aggressive>|boost-off|boost-test [ms]]"
+    echo "usage: action.sh [status|load|fb-start|fb-stop|boost-on <light|standard|aggressive>|boost-off|boost-test [ms]|boost-guard|boost-guard-stop]"
     ;;
 esac

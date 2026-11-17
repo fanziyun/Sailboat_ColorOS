@@ -72,7 +72,18 @@ case "$1" in
   on) apply "${2:-$PROFILE_DEFAULT}" ;;
   off) apply off ;;
   apply) apply "$2" ;;
+  guard)
+    while true; do
+      cur=$(cat "$IB/input_boost_freq" 2>/dev/null | tr -s ' \t' ' ')
+      want=$(profile_freqs "$(cat "$STAMP" 2>/dev/null)")
+      if [ -n "$want" ] && [ "$cur" != "$want" ]; then
+        apply "$(cat "$STAMP" 2>/dev/null)"
+        echo "$(date +%H:%M:%S) guard: 频率值被外部改回，已重新套用" >> "$MODDIR/load.log"
+      fi
+      sleep "${GUARD_INTERVAL:-10}"
+    done
+    ;;
   test) boost_once "$2" ;;
   status|"") status ;;
-  *) echo "usage: boost.sh [on <light|standard|aggressive>|off|apply <profile>|test [ms]|status]" ;;
+  *) echo "usage: boost.sh [on <light|standard|aggressive>|off|apply <profile>|guard|test [ms]|status]" ;;
 esac

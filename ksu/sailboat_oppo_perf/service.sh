@@ -3,6 +3,11 @@ MODDIR=${0%/*}
 LOG="$MODDIR/load.log"
 . "$MODDIR/tunables.conf"
 
+if [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt 40 ]; then
+  mv -f "$LOG" "$LOG.1" 2>/dev/null
+fi
+: > "$LOG" 2>/dev/null
+
 insmod_one() {
   local ko="$1"
   local name
@@ -38,4 +43,5 @@ fi
     [ "$i" -ge 120 ] && break
   done
   sh "$MODDIR/boost.sh" on "${PROFILE_DEFAULT:-standard}" >>"$LOG" 2>&1
+  [ "${GUARD_INTERVAL:-0}" -gt 0 ] 2>/dev/null && sh "$MODDIR/boost.sh" guard >>"$LOG" 2>&1 &
 ) &

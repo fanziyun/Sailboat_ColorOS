@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-17
+
+- 新增 `scripts/selfcheck.sh`：设备侧自检，覆盖模块加载、节点齐全、档位是否被 ROM 改回、
+  guard、KSU 模块文件、HAL 对接（含一次 ux_task 安全读写）、环境。真机跑通，当前 0 FAIL。
+- `boost.sh` 加 `guard` 子命令：发现 `input_boost_freq` 被外部改回就重新套用档位并记日志。
+  起因是实测档位会被 ROM 事件触发式覆盖。`tunables.conf` 加 `GUARD_INTERVAL`，0 可关。
+- `service.sh` 修 `load.log` 无限堆积：超过 40 行转 `.1` 再重建，每次开机只留本次记录。
+- 新增 `docs/待办-sched_assist启用.md`：记录 `enabled=1` 导致内核 panic 的根因
+  （`set_next_entity` 与 ABK 回移的 EEVDF 不兼容）、处理步骤与不要重复踩的坑。
+  按用户决定先关着，不处理。
+
 ## 0.5.0 — 2026-11-16
 
 - KSU 模块新增性能档位与点击提频：`boost.sh` + `tunables.conf`，三档 `light/standard/aggressive`，走 WALT 内核 `input_boost`，不另建用户态守护进程。

@@ -17,10 +17,10 @@
 |---|---|
 | `module.prop` | KSU 模块描述 |
 | `post-fs-data.sh` | 修 `.ko` 与脚本权限 |
-| `service.sh` | 加载 `.ko`；等 `sys.boot_completed=1` 后套用默认档位 |
-| `boost.sh` | 档位核心：`on <档>`、`off`、`test [ms]`、`status` |
-| `tunables.conf` | 档位参数（频率、时长、手动测试参数） |
-| `action.sh` | KSU 动作入口：`status`、`load`、`boost-on`、`boost-off`、`boost-test` |
+| `service.sh` | 加载 `.ko`；等 `sys.boot_completed=1` 后套用默认档位并启动 guard |
+| `boost.sh` | 档位核心：`on <档>`、`off`、`guard`、`test [ms]`、`status` |
+| `tunables.conf` | 档位参数（频率、时长、手动测试参数、guard 间隔） |
+| `action.sh` | KSU 动作入口：`status`、`load`、`boost-on`、`boost-off`、`boost-test`、`boost-guard`、`boost-guard-stop` |
 | `sepolicy.rule` | `insmod` 所需规则 |
 | `lib/modules/*.ko` | 打包时放入的内核模块 |
 
@@ -36,6 +36,23 @@
 | `off` | — | 关闭 `sched_boost_on_input` | | |
 
 同时会打开电源键提频（`powerkey_sched_boost_on_input`、`powerkey_input_boost_ms`）。
+
+## 三·补：ROM 会覆盖档位，用 guard 兜住
+
+实测发现：模块开机套用档位后，`input_boost_freq` 可能被 ROM 改回默认值（`1228800 0 0 0 0 0 0 0`），而 `sched_boost_on_input` 不被碰。是**事件触发的一次性覆盖**，不是持续覆盖（连续观察 20 秒 + 四次应用启动都没再被改）。来源很可能是性能 HAL 在某个时机重写。
+
+因此 `boost.sh` 加了 `guard` 子命令：每 `GUARD_INTERVAL` 秒读一次 `input_boost_freq`，发现和当前档位不符就重新写回，并在 `load.log` 记一行。`service.sh` 开机套用档位后自动起它（`GUARD_INTERVAL=0` 可关）。
+
+手动控制：
+
+```bash
+adb shell su -c 'sh /data/adb/modules/sailboat_oppo_perf/action.sh boost-guard'
+adb shell su -c 'sh /data/adb/modules/sailboat_oppo_perf/action.sh boost-guard-stop'
+```
+
+验证（2026-11-17）：手工把频率改回 ROM 默认值，12 秒后 guard 恢复成 standard 档，`load.log` 出现 `guard: 频率值被外部改回，已重新套用`。
+
+代价：一个常驻 shell 循环，每 10 秒读一个 proc 文件。这与"点击提频本身不走用户态"不冲突——guard 只做状态校正，不参与提频决策。
 
 各簇可用频率（实测）：
 
