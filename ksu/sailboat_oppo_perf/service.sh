@@ -1,6 +1,7 @@
 #!/system/bin/sh
 MODDIR=${0%/*}
 LOG="$MODDIR/load.log"
+. "$MODDIR/tunables.conf"
 
 insmod_one() {
   local ko="$1"
@@ -28,3 +29,13 @@ insmod_dir "$MODDIR/lib/modules"
 if [ -f "$MODDIR/enable_frameboost" ] && [ -x "$MODDIR/bin/Sail_FrameBoost" ]; then
   "$MODDIR/bin/Sail_FrameBoost" >/dev/null 2>&1 &
 fi
+
+(
+  i=0
+  while [ "$(getprop sys.boot_completed)" != "1" ]; do
+    sleep 1
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && break
+  done
+  sh "$MODDIR/boost.sh" on "${PROFILE_DEFAULT:-standard}" >>"$LOG" 2>&1
+) &

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 — 2026-11-16
+
+- KSU 模块新增性能档位与点击提频：`boost.sh` + `tunables.conf`，三档 `light/standard/aggressive`，走 WALT 内核 `input_boost`，不另建用户态守护进程。
+- `action.sh` 增加 `boost-on` / `boost-off` / `boost-test`，保留原有 `fb-start` / `fb-stop`；`service.sh` 开机等 `sys.boot_completed` 后再套用默认档位。
+- 新增 `tools/uinput_tap`：`/dev/uinput` 真实触摸注入的最小实现，配 NDK 构建脚本。
+- 真机验证：kprobe 打在 `sched_walt` 的 `do_input_boost` 上，一次点击命中 1 次，确认走的是内核提频路径。
+- 新增 `docs/KSU-性能档位.md`。
+
 ## 0.4.0 — 2026-11-15
 
 - 迁入用户态优化组件 `components/Sail_FrameBoost`（源码、工具、KSU 模块配置）；按用户决定：优化类组件即使实测无可测收益也迁移保留。

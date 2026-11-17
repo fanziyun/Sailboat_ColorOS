@@ -149,6 +149,45 @@ bash scripts/package_ksu.sh
 2. 目前挂着是**空转**状态：`sched_assist_enabled=0`、没有 ux 任务，`oplus_replace_next_task_fair`、`should_ux_task_skip_cpu`、`oplus_check_preempt_wakeup` 都在开头 `if (unlikely(!global_sched_assist_enabled)) return;`；`enqueue_entity` / `dequeue_entity` / `place_entity` 等 handler 在未开 `CONFIG_LOCKING_PROTECT`、`CONFIG_OPLUS_FEATURE_FAKE_CAP` 时是空函数体。
 3. 本轮**没有**碰 ROM 侧。`vendor-oplus-hardware-performance` HAL 是否会因为这些节点出现而停止报 open 失败，尚未观察；`sched_assist_enabled` 也尚未置 1。
 
+## 首次开启开关的真机崩溃（2026-11-15）
+
+把 `sched_assist_enabled` 置 1 后约一分钟、在一次应用启动之后，设备画面卡死并重启。panic 日志取自 `/data/vendor/diag/last_kmsg`：
+
+```
+kernel BUG at kernel/sched/walt/walt.c:4488!
+pc : android_rvh_dequeue_task+0x40c/0x43c [sched_walt]
+Call trace:
+ android_rvh_dequeue_task [sched_walt]
+ __traceiter_android_rvh_after_dequeue_task
+ dequeue_task+0x1b0/0x1f8
+ __schedule → schedule → schedule_hrtimeout_range_clock → do_epoll_wait
+（CPU2 PID 8748 Comm system_server）
+```
+
+要点：
+
+- BUG_ON 落在 **`sched_walt` 自己的 dequeue hook** 里，不是我们模块的栈帧上。也就是说触发点是 WALT 对 rq 状态的断言，我们的代码是把 rq 改成 WALT 不接受的样子的一方。
+- 时间线：模块 28.5s 加载，panic 在 uptime 1112.5s；开关在此之前约 80 秒置 1，期间有一次应用启动。
+- `pstore` 为空（`/sys/fs/pstore/` 无内容），这台机器的崩溃日志在 `/data/vendor/diag/last_kmsg`，以后抓 panic 直接读这里。
+- 该内核 cmdline 带 `hung_task_panic=1 hung_task_timeout_secs=30`、`softlockup_panic=1`、`panic_on_rcu_stall=1`，任何一次卡死都会直接重启。
+
+首要嫌疑是 `android_rvh_replace_next_task_fair_handler` 里的这段：
+
+```c
+if (simple && true == *repick) {
+	for_each_sched_entity((*se)) {
+		struct cfs_rq *cfs_rq = cfs_rq_of(*se);
+		set_next_entity(cfs_rq, *se);
+	}
+}
+```
+
+5.15 蓝本用它把挑中的任务从红黑树里摘掉，但 6.18（同样跑 EEVDF 的一加 16）的同一个 handler 里**整段删掉了**（6.18 `sa_fair.c:1015`，连 `se`、`simple` 两个参数都不要了）。本机内核由 ABK 的 `batch15_perf_eevdf.py` 把 `set_next_entity()` 的函数体换成了 EEVDF 版本，从 hook 里越界调用它会破坏 `cfs_rq->curr`/`nr_running`/增强红黑树的一致性，再由 WALT 的 dequeue 断言引爆。
+
+次要嫌疑：`oplus_set_ux_state_lock()` 在 proc 写入上下文里改任务的 ux 优先级/nice，WALT 对任务优先级与 rq 类的一致性有断言。
+
+结论：`sa_fair.c` 不能原样照搬 5.15，需要对着 6.18 逐个 hook 函数比对（`replace_next_task_fair`、`place_entity`、`check_preempt_tick`、`pick_next_entity` 在 6.18 里都改过签名或逻辑）。这条同时也说明：**ABK 的 EEVDF 回移与 5.15 版 OPPO 调度代码在语义上不兼容**，是移植的硬约束，不是可选优化。
+
 ## 未完成
 
 - [x] 补 5 个 HAL 需要的节点（`audio/enable`、`disable_setting`、`sched_prop`、`tpd_cmds`、`tpd_id`）与 `/proc/sys/kernel/sched_assist_scene`

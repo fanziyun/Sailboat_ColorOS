@@ -1,6 +1,6 @@
 id=sailboat_oppo_perf
 name=sailboat 附加模块（三）— OPPO 性能内核模块
-version=0.1.0
-versionCode=1
+version=0.5.0
+versionCode=5
 author=fanziyun
-description=把 ColorOS 性能调用内核模块 backport 到 5.15：sched_assist、frame_boost、uad、task_*。加载后提供 /proc/oplus_scheduler 等节点，供 ColorOS 性能 HAL 与桌面加速链使用。
+description=加载 OPPO 性能内核模块（sched_assist 等，提供 /proc/oplus_scheduler），并带性能档位：点击提频走 WALT 内核 input_boost，档位 off/light/standard/aggressive 可用 action.sh 或 boost.sh 切换。
