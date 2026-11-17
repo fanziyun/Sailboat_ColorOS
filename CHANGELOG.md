@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0 — 2026-11-17
+
+- 新增 `scripts/ab_launch.sh`：同一次开机内交替 A/B 测启动帧数据（每轮动态定位桌面图标、
+  uinput 真实点击、点击后校验前台包名，无效样本跳过）。
+- `measure_launch.sh` 支持坐标模式与标签模式；修掉三处自身 bug：MSYS 路径转换、
+  `ts_$LABEL_$i` 被当成变量名、Python 在 Windows 文本模式写 `\r\n` 导致算术报错。
+- P0 落地：`input_boost_ms` 100→400/200/600（按档位），新增 GPU 频率下限控制
+  （`GPU_PWRLEVEL`，开机记录原值，off 时恢复），guard 同时看守频率与 GPU 档位。
+- guard 停止方式从 `pkill -f`（会误杀调用方自己的 shell）改为 pid 文件 + `kill`。
+- **实测结论：P0 对 QQ 启动流畅度无可测收益。** 交替 A/B 4 对，去掉预热离群后
+  ON 2.13% vs OFF 1.95%。与 Sail_FrameBoost 此前的结论一致。是否回退未定。
+- 修正判读口径：`displayConfigStats` 不被 `--timestats -clear` 清零，是累积值，
+  不能用来判断单次启动的刷新率；只有 `presentToPresent` 直方图被清零。
+
 ## 0.6.0 — 2026-11-17
 
 - 新增 `scripts/selfcheck.sh`：设备侧自检，覆盖模块加载、节点齐全、档位是否被 ROM 改回、

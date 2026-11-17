@@ -38,13 +38,23 @@ case "$cmd" in
     sh "$MODDIR/boost.sh" status
     ;;
   boost-guard)
-    pkill -f "boost.sh guard" 2>/dev/null
-    sh "$MODDIR/boost.sh" guard &
-    echo "guard started"
+    if [ -f "$MODDIR/guard.pid" ] && kill -0 "$(cat "$MODDIR/guard.pid")" 2>/dev/null; then
+      echo "guard already running (pid $(cat "$MODDIR/guard.pid"))"
+    else
+      rm -f "$MODDIR/guard.pid"
+      nohup sh "$MODDIR/boost.sh" guard >/dev/null 2>&1 &
+      sleep 1
+      echo "guard started (pid $(cat "$MODDIR/guard.pid" 2>/dev/null))"
+    fi
     ;;
   boost-guard-stop)
-    pkill -f "boost.sh guard" 2>/dev/null
-    echo "guard stopped"
+    if [ -f "$MODDIR/guard.pid" ]; then
+      kill "$(cat "$MODDIR/guard.pid")" 2>/dev/null
+      rm -f "$MODDIR/guard.pid"
+      echo "guard stopped"
+    else
+      echo "guard not running"
+    fi
     ;;
   boost-off)
     sh "$MODDIR/boost.sh" off
