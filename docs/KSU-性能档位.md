@@ -20,7 +20,8 @@
 | `service.sh` | 加载 `.ko`；等 `sys.boot_completed=1` 后套用默认档位并启动 guard |
 | `boost.sh` | 档位核心：`on <档>`、`off`、`guard`、`test [ms]`、`status` |
 | `tunables.conf` | 档位参数（频率、时长、手动测试参数、guard 间隔） |
-| `action.sh` | KSU 动作入口：`status`、`load`、`boost-on`、`boost-off`、`boost-test`、`boost-guard`、`boost-guard-stop` |
+| `action.sh` | KSU 动作入口：`status`、`load`、`boost-on`、`boost-off`、`boost-test`、`boost-guard`、`boost-guard-stop`、`uni-rt-start`、`uni-rt-stop`、`uni-rt-status` |
+| `unirender_rt.sh` | 把 SF 的 `UniRenderEngine` 线程设为 `SCHED_FIFO` prio 2，守护进程每 5s 复核一次（SF 重启后自动重套）；开关文件 `enable_unirender_rt` |
 | `sepolicy.rule` | `insmod` 所需规则 |
 | `lib/modules/*.ko` | 打包时放入的内核模块 |
 
@@ -126,3 +127,21 @@ adb shell su -c 'sh /data/adb/modules/sailboat_oppo_perf/action.sh boost-test 20
 - [ ] 场景联动（`sched_boost`、`sched_low_latency`、`sched_pipeline`）尚未接进档位。
 - [ ] 与 `sched_assist` 的 ux 路径联动：目前两套互不知情，都打开时可能有叠加。
 - [ ] 冷启动时长（`am_proc_start` → 首帧）还没测，只测了帧分布。
+
+## 九、UniRenderEngine 常驻 RT（实验特性，默认关闭）
+
+依据 `out/SF-UniRender调度策略对照-20261118.md` 的 4 对交替 A/B：`SCHED_OTHER / nice -10` 下 UniRenderEngine 在 18s 窗口内有 1.7–2.1s 处于"可运行未上 CPU"，最长单段 95–117ms，这段时间直接表现为 RenderEngine 预绘制空档；改成 `SCHED_FIFO / prio 2`（与 RenderEngine 同级）后该时长降到 21–36ms，SF 帧 p95 22.29→19.80ms，Late Present p95 24.95→16.64ms，每 18s 多交付约 90 帧。
+
+代价与风险：桌面主线程 p95 从 8.63ms 升到 10.60ms，18s 内 `over 33ms` 桌面帧 8→10 个；该线程在 18s 内累计占约 6s CPU，RT 无带宽上限，存在饿死同核 CFS 任务的风险；与音频等其它 RT 线程的交互未测。
+
+启用与关闭：
+
+```bash
+sh /data/adb/modules/sailboat_oppo_perf/action.sh uni-rt-start
+sh /data/adb/modules/sailboat_oppo_perf/action.sh uni-rt-stop
+sh /data/adb/modules/sailboat_oppo_perf/action.sh uni-rt-status
+```
+
+`uni-rt-start` 会写开关文件 `enable_unirender_rt` 并拉起守护进程（pid 记在 `unirender_rt.pid`）；`service.sh` 在开机时发现开关文件就自动启动守护。`uni-rt-stop` 删除开关文件、结束守护并把线程改回 `SCHED_OTHER`，nice 保持 −10。
+
+已知未覆盖：常驻 RT 的长时间功耗、发热、音频抖动；与 `sched_assist` ux 路径叠加（当前 `sched_assist_enabled=0`）；有界 RT（只在预绘制窗口提优先级）与 nice −20 的对照组都还没跑。

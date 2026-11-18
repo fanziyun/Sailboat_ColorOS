@@ -64,7 +64,18 @@ case "$cmd" in
     sh "$MODDIR/boost.sh" test "$1"
     echo "tested"
     ;;
+  uni-rt-start)
+    sh "$MODDIR/unirender_rt.sh" start
+    sh "$MODDIR/unirender_rt.sh" status
+    ;;
+  uni-rt-stop)
+    sh "$MODDIR/unirender_rt.sh" stop
+    sh "$MODDIR/unirender_rt.sh" status
+    ;;
+  uni-rt-status)
+    sh "$MODDIR/unirender_rt.sh" status
+    ;;
   *)
-    echo "usage: action.sh [status|load|fb-start|fb-stop|boost-on <light|standard|aggressive>|boost-off|boost-test [ms]|boost-guard|boost-guard-stop]"
+    echo "usage: action.sh [status|load|fb-start|fb-stop|boost-on <light|standard|aggressive>|boost-off|boost-test [ms]|boost-guard|boost-guard-stop|uni-rt-start|uni-rt-stop|uni-rt-status]"
     ;;
 esac

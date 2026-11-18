@@ -44,4 +44,5 @@ fi
   done
   sh "$MODDIR/boost.sh" on "${PROFILE_DEFAULT:-standard}" >>"$LOG" 2>&1
   [ "${GUARD_INTERVAL:-0}" -gt 0 ] 2>/dev/null && sh "$MODDIR/boost.sh" guard >>"$LOG" 2>&1 &
+  [ -f "$MODDIR/enable_unirender_rt" ] && sh "$MODDIR/unirender_rt.sh" start >>"$LOG" 2>&1
 ) &
