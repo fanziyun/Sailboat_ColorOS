@@ -1,0 +1,2 @@
+allow ksu self:capability sys_module;
+allow ksu kernel:system module_request;

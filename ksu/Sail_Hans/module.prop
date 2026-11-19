@@ -1,0 +1,6 @@
+id=Sail_Hans
+name=Sail HANS 5.15 prototype
+version=0.1.0-prototype
+versionCode=1
+author=Sailboat
+description=独立 HANS 审计原型；默认不装载，不开放原生冻结策略。必须先完成目标 ABI 核对。

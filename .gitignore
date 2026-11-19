@@ -12,6 +12,10 @@ modules.builtin
 # fetched upstream trees
 src_upstream/
 
+# python bytecode
+__pycache__/
+*.pyc
+
 # editor / os
 .vscode/
 .idea/
