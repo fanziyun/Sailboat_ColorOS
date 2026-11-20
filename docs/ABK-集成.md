@@ -72,3 +72,9 @@ SAILBOAT_CLANG_BIN=<clang bin> bash scripts/wsl/build_local_ux.sh \
 - ABK 的 EEVDF 回移会改写 `fair.c` 的 pick 路径；`sched_assist` 依赖的 vendor hook 调用点是否在回移后语义不变，需要真机验证（见 `docs/待办-sched_assist启用.md`）。
 - 上游分支固定为 `oneplus/sm8550_v_15.0.0_oneplus11`；上游更新不会自动跟进。
 - `port/` 里 frame_boost、uad、task_sched 仍是 README，只有 sched_assist 实际编入。
+
+## 内建形态（2026-11-21）
+
+`sailboat_ux_build_mode=builtin` 时，`setup.sh` 在 after_patch 把最小 UX 适配结果作为基线，再调用 `scripts/prepare_animation_boost.py --builtin` 生成 combined profile（sched_assist + FrameBoost V1 + UAD ioctl），Makefile 用 `obj-$(CONFIG_OPLUS_SCHED_ASSIST)`。before_build 保留该源码，只把 `CONFIG_OPLUS_SCHED_ASSIST=y` 写入 defconfig。上游稀疏检出增加 `vendor/oplus/kernel/cpu/uad/ua_ioctl`，供 frame ioctl 源码核对。运行期默认开启，仍拒绝热关。
+
+模块形态（`module`）保持原有最小 UX 流程，combined profile 的 ko 由本地脚本构建。

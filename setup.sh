@@ -20,7 +20,7 @@ fetch_upstream() {
   if [ ! -e "$SRC_CACHE" ]; then
     git clone -q --depth 1 --filter=blob:none --sparse --no-checkout "$UPSTREAM_REPO" "$SRC_CACHE"
     git -C "$SRC_CACHE" fetch -q --depth 1 origin "$UPSTREAM_SHA"
-    git -C "$SRC_CACHE" sparse-checkout set vendor/oplus/kernel/cpu/sched/sched_assist vendor/oplus/kernel/cpu/sched/frame_boost
+    git -C "$SRC_CACHE" sparse-checkout set vendor/oplus/kernel/cpu/sched/sched_assist vendor/oplus/kernel/cpu/sched/frame_boost vendor/oplus/kernel/cpu/uad/ua_ioctl
     git -C "$SRC_CACHE" checkout -q --detach "$UPSTREAM_SHA"
   fi
   [ "$(git -C "$SRC_CACHE" rev-parse HEAD)" = "$UPSTREAM_SHA" ] || {
@@ -49,10 +49,23 @@ inject_after_patch() {
     rm -rf "$staging"
     return 1
   fi
+  if [ "$UX_MODE" = builtin ]; then
+    local combined
+    combined="$(mktemp -d "$KROOT/common/drivers/.sailboat_coloros_ux.XXXXXX")"
+    if ! python3 -I "$ROOT/scripts/prepare_animation_boost.py" --upstream "$SRC_CACHE" \
+        --base-sa "$staging" --output "$combined" --builtin; then
+      rm -rf "$staging" "$combined"
+      return 1
+    fi
+    rm -rf "$staging"
+    staging="$combined"
+  fi
+  local help_text='Explicit UX scheduling, default enabled; no hot disable.'
+  [ "$UX_MODE" = builtin ] && help_text='Sailboat ColorOS UX and FrameBoost V1 built in; default enabled, no hot disable.'
   printf '%s\n' 'config OPLUS_SCHED_ASSIST' \
-    '    tristate "Sailboat minimal ColorOS UX"' '    depends on SMP && PROC_FS' \
+    '    tristate "Sailboat ColorOS UX"' '    depends on SMP && PROC_FS' \
     '    default n' '    help' \
-    '      Explicit UX scheduling, default off; no hot disable or frequency boost.' > "$staging/Kconfig"
+    "      $help_text" > "$staging/Kconfig"
   if [ -e "$drv" ]; then
     [ -f "$drv/Makefile" ] && grep -q sailboat_sched_assist "$drv/Makefile" || {
       log 'refusing to replace an unrecognized driver directory'; return 1;
@@ -66,19 +79,25 @@ inject_after_patch() {
   if ! grep -q 'sailboat_sched_assist/' "$KROOT/common/drivers/Makefile"; then
     printf '\nobj-$(CONFIG_OPLUS_SCHED_ASSIST) += sailboat_sched_assist/\n' >> "$KROOT/common/drivers/Makefile"
   fi
-  log "injected ux_min upstream=$UPSTREAM_SHA default_off=1"
+  log "injected ux profile mode=$UX_MODE upstream=$UPSTREAM_SHA"
 }
 
 enable_before_build() {
   [ -n "$DEFCONF" ] && [ -f "$DEFCONF" ] || { log 'missing DEFCONFIG'; return 1; }
-  [ -n "$KROOT" ] && [ -f "$KROOT/common/drivers/sailboat_sched_assist/sailboat_coloros_ux_profile.json" ] || {
+  local drv="$KROOT/common/drivers/sailboat_sched_assist"
+  [ -n "$KROOT" ] && { [ -f "$drv/sailboat_coloros_ux_profile.json" ] || \
+    [ -f "$drv/sailboat_coloros_animation_profile.json" ]; } || {
     log 'missing after_patch UX profile'; return 1;
   }
-  local rebuild_args=(--out-dir "$KROOT/common/drivers/sailboat_sched_assist"
-    --port-dir "$ROOT/port/sched_assist/src" --kernel-dir "$KROOT/common"
-    --source-sha "$UPSTREAM_SHA" --config "$DEFCONF")
-  [ "$UX_MODE" = builtin ] && rebuild_args+=(--builtin)
-  python3 -I "$ROOT/scripts/adapt_sched_assist.py" "${rebuild_args[@]}"
+  if [ "$UX_MODE" = builtin ] && [ -f "$drv/sailboat_coloros_animation_profile.json" ]; then
+    log 'keeping after_patch animation profile sources'
+  else
+    local rebuild_args=(--out-dir "$drv"
+      --port-dir "$ROOT/port/sched_assist/src" --kernel-dir "$KROOT/common"
+      --source-sha "$UPSTREAM_SHA" --config "$DEFCONF")
+    [ "$UX_MODE" = builtin ] && rebuild_args+=(--builtin)
+    python3 -I "$ROOT/scripts/adapt_sched_assist.py" "${rebuild_args[@]}"
+  fi
   python3 -I - "$DEFCONF" "$UX_CONFIG" <<'PY'
 import pathlib
 import sys
@@ -88,7 +107,7 @@ lines = [line for line in lines if not line.startswith('CONFIG_OPLUS_SCHED_ASSIS
          and line != '# CONFIG_OPLUS_SCHED_ASSIST is not set']
 path.write_text('\n'.join(lines) + '\nCONFIG_OPLUS_SCHED_ASSIST=' + sys.argv[2] + '\n')
 PY
-  log "CONFIG_OPLUS_SCHED_ASSIST=$UX_CONFIG; runtime UX remains off"
+  log "CONFIG_OPLUS_SCHED_ASSIST=$UX_CONFIG; runtime default from profile"
 }
 
 case "$STAGE" in

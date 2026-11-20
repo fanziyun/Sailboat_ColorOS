@@ -19,7 +19,7 @@ ux = probe.ux
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(upstream, base, destination):
+def prepare(upstream, base, destination, builtin):
     stamp = json.loads((base / ux.STAMP).read_text())
     inputs = {}
     for path in base.iterdir():
@@ -285,7 +285,8 @@ fail:
                    'frame_ioctl_V1', 'frame_sysctl', 'ua_ioctl_common',
                    'sailboat_coloros_fbg_backend', 'sailboat_coloros_fbg_ioctl']
     objects = ux.OBJECTS + fbg_objects
-    texts['Makefile'] = ('obj-m += sailboat_sched_assist.o\nsailboat_sched_assist-y := ' +
+    obj = 'obj-$(CONFIG_OPLUS_SCHED_ASSIST)' if builtin else 'obj-m'
+    texts['Makefile'] = (obj + ' += sailboat_sched_assist.o\nsailboat_sched_assist-y := ' +
         ' '.join(name + '.o' for name in objects) + '\n'
         'ccflags-y += -I$(srctree)/ -I$(srctree)/kernel/sched -I$(src)\n'
         'ccflags-y += -DCONFIG_OPLUS_FEATURE_FRAME_BOOST=1 -DCONFIG_OPLUS_FEATURE_SCHED_ASSIST=1\n')
@@ -293,7 +294,7 @@ fail:
         (destination / name).write_bytes(text.encode())
     manifest = {'profile': 'sailboat_coloros_animation_v1', 'upstream_sha': ux.UPSTREAM_SHA,
                 'source_id': identity, 'base_source_id': stamp['source_id'],
-                'default_enabled': True, 'hot_disable': False,
+                'default_enabled': True, 'hot_disable': False, 'builtin': builtin,
                 'output_sha256': {name: ux.digest(text.encode()) for name, text in texts.items()}}
     (destination / 'sailboat_coloros_animation_profile.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print('Prepared animation profile (requires matching no-SA base):', destination)
@@ -304,8 +305,9 @@ def main():
     parser.add_argument('--upstream', type=Path, required=True)
     parser.add_argument('--base-sa', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--builtin', action='store_true')
     args = parser.parse_args()
-    prepare(args.upstream, args.base_sa, args.output)
+    prepare(args.upstream, args.base_sa, args.output, args.builtin)
 
 
 if __name__ == '__main__':
