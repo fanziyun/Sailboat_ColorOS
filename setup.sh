@@ -5,6 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGE="${CUSTOM_EXTERNAL_MODULE_STAGE:-}"
 KROOT="${KERNEL_ROOT:-}"
 DEFCONF="${DEFCONFIG:-}"
+UX_MODE="${SAILBOAT_UX_BUILD_MODE:-builtin}"
+case "$UX_MODE" in
+  module) UX_CONFIG=m ;;
+  builtin) UX_CONFIG=y ;;
+  *) printf 'unsupported SAILBOAT_UX_BUILD_MODE\n' >&2; exit 1 ;;
+esac
 UPSTREAM_REPO=https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550.git
 UPSTREAM_SHA=0241347436d48df011e2a6f6fe2d8740c26a379c
 SRC_CACHE="${SAILBOAT_UPSTREAM_DIR:-${GITHUB_WORKSPACE:-/tmp}/_sailboat_coloros_upstream}"
@@ -35,14 +41,16 @@ inject_after_patch() {
   cp "$up/frame_boost/frame_boost_V1/frame_group.h" "$staging"/frame_group.h
   local config_args=()
   [ -z "$DEFCONF" ] || config_args=(--config "$DEFCONF")
+  local adapt_args=(--source-sha "$UPSTREAM_SHA")
+  [ "$UX_MODE" = builtin ] && adapt_args+=(--builtin)
   if ! python3 -I "$ROOT/scripts/adapt_sched_assist.py" --out-dir "$staging" \
       --port-dir "$ROOT/port/sched_assist/src" --kernel-dir "$KROOT/common" \
-      --source-sha "$UPSTREAM_SHA" --builtin "${config_args[@]}"; then
+      "${adapt_args[@]}" "${config_args[@]}"; then
     rm -rf "$staging"
     return 1
   fi
   printf '%s\n' 'config OPLUS_SCHED_ASSIST' \
-    '    bool "Sailboat minimal ColorOS UX"' '    depends on SMP && PROC_FS' \
+    '    tristate "Sailboat minimal ColorOS UX"' '    depends on SMP && PROC_FS' \
     '    default n' '    help' \
     '      Explicit UX scheduling, default off; no hot disable or frequency boost.' > "$staging/Kconfig"
   if [ -e "$drv" ]; then
@@ -66,12 +74,21 @@ enable_before_build() {
   [ -n "$KROOT" ] && [ -f "$KROOT/common/drivers/sailboat_sched_assist/sailboat_coloros_ux_profile.json" ] || {
     log 'missing after_patch UX profile'; return 1;
   }
-  python3 -I "$ROOT/scripts/adapt_sched_assist.py" \
-    --out-dir "$KROOT/common/drivers/sailboat_sched_assist" \
-    --port-dir "$ROOT/port/sched_assist/src" --kernel-dir "$KROOT/common" \
-    --source-sha "$UPSTREAM_SHA" --builtin --config "$DEFCONF"
-  grep -q '^CONFIG_OPLUS_SCHED_ASSIST=y$' "$DEFCONF" || printf '\nCONFIG_OPLUS_SCHED_ASSIST=y\n' >> "$DEFCONF"
-  log 'CONFIG_OPLUS_SCHED_ASSIST=y; runtime UX remains off'
+  local rebuild_args=(--out-dir "$KROOT/common/drivers/sailboat_sched_assist"
+    --port-dir "$ROOT/port/sched_assist/src" --kernel-dir "$KROOT/common"
+    --source-sha "$UPSTREAM_SHA" --config "$DEFCONF")
+  [ "$UX_MODE" = builtin ] && rebuild_args+=(--builtin)
+  python3 -I "$ROOT/scripts/adapt_sched_assist.py" "${rebuild_args[@]}"
+  python3 -I - "$DEFCONF" "$UX_CONFIG" <<'PY'
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text().splitlines()
+lines = [line for line in lines if not line.startswith('CONFIG_OPLUS_SCHED_ASSIST=')
+         and line != '# CONFIG_OPLUS_SCHED_ASSIST is not set']
+path.write_text('\n'.join(lines) + '\nCONFIG_OPLUS_SCHED_ASSIST=' + sys.argv[2] + '\n')
+PY
+  log "CONFIG_OPLUS_SCHED_ASSIST=$UX_CONFIG; runtime UX remains off"
 }
 
 case "$STAGE" in

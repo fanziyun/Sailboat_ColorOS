@@ -45,8 +45,8 @@ else
     modpost_args=("MODPOST=$modpost_command")
   fi
   make -C "$KDIR" M="$OUT" ARCH=arm64 LLVM=1 PAHOLE=true "${modpost_args[@]}" modules
-  "$CLANG_BIN/llvm-nm" -u "$OUT/sail_sched_assist.ko" > "$OUT/imports.txt"
-  python3 -I - "$OUT/sail_sched_assist.mod.c" "$KDIR/Module.symvers" "$OUT/imports.txt" <<'PY'
+  "$CLANG_BIN/llvm-nm" -u "$OUT/sailboat_sched_assist.ko" > "$OUT/imports.txt"
+  python3 -I - "$OUT/sailboat_sched_assist.mod.c" "$KDIR/Module.symvers" "$OUT/imports.txt" <<'PY'
 import pathlib
 import re
 import sys
@@ -68,9 +68,9 @@ if missing or bad:
     raise SystemExit(f'invalid symbol CRC table: missing={sorted(missing)} mismatched={sorted(bad)}')
 print(f'{len(entries)} symbol CRCs match the build kernel; {len(imports)} strong imports covered')
 PY
-  "$CLANG_BIN/llvm-readelf" -h "$OUT/sail_sched_assist.ko" > "$OUT/elf-header.txt"
-  "$CLANG_BIN/llvm-readelf" -p .modinfo "$OUT/sail_sched_assist.ko" > "$OUT/modinfo.txt"
+  "$CLANG_BIN/llvm-readelf" -h "$OUT/sailboat_sched_assist.ko" > "$OUT/elf-header.txt"
+  "$CLANG_BIN/llvm-readelf" -p .modinfo "$OUT/sailboat_sched_assist.ko" > "$OUT/modinfo.txt"
   cp "$KDIR/.config" "$OUT/build.config"
-  sha256sum "$OUT/sail_sched_assist.ko" "$OUT/build.config" > "$OUT/sha256.txt"
-  printf 'build_only=%s; init refuses MODULE loading; do not install\n' "$OUT/sail_sched_assist.ko"
+  sha256sum "$OUT/sailboat_sched_assist.ko" "$OUT/build.config" > "$OUT/sha256.txt"
+  printf 'module_compile=%s; load only on its verified matching no-SA base\n' "$OUT/sailboat_sched_assist.ko"
 fi

@@ -179,32 +179,36 @@ def adapt(out, port, kernel, source_sha, builtin, config=None):
     text = body(text, 'enable_sched_assist', '\t/* sailboat_coloros_ux_min: only the explicit root control may activate UX. */\n\t(void)step;')
     text = sub(text, 'typedef unsigned long (*profile_event_register_t)', 'typedef int (*profile_event_register_t)')
     text = body(text, 'oplus_sched_assist_init', '''\tint ret;
-#ifdef MODULE
-\treturn -EOPNOTSUPP;
-#endif
+
 \tOPLUS_OEM_DATA_SIZE_TEST(struct oplus_rq, struct rq);
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_PREFLIGHT);
 \tret = sailboat_coloros_ux_prepare();
 \tif (ret)
 \t\tgoto fail;
+\tsailboat_coloros_ux_reside();
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_RQ_INIT);
 \tsched_assist_init_oplus_rq();
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_OEM_INIT);
 \tret = sa_oemdata_init();
 \tif (ret)
 \t\tgoto fail;
 \tupdate_ux_sched_cputopo();
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_HOOK_INIT);
 \tret = register_scheduler_vendor_hooks();
 \tif (ret)
 \t\tgoto fail;
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_PROC_INIT);
 \tret = oplus_sched_assist_proc_init();
 \tif (ret)
 \t\tgoto fail;
+\tsailboat_coloros_ux_init_stage(SAILBOAT_UX_READY_INIT);
 \tret = sailboat_coloros_ux_publish_ready();
 \tif (ret)
 \t\tgoto fail;
 \tpr_info("sailboat_coloros_ux_min: ready, runtime disabled\\n");
 \treturn 0;
 fail:
-\tpr_err("sailboat_coloros_ux_min: init failed %d, runtime disabled\\n", ret);
-\treturn ret;''')
+\treturn sailboat_coloros_ux_init_failed(ret);''')
     texts['sched_assist.c'] = text
 
     text = texts['sa_common.c']
@@ -380,11 +384,14 @@ struct oplus_task_struct *sailboat_coloros_ux_ensure_ots(struct task_struct *tas
     for path in port.iterdir():
         if path.suffix in ('.c', '.h'):
             texts[path.name] = path.read_text(encoding='utf-8')
+    source_id = digest((source_sha + adapter_hash + json.dumps(port_hashes, sort_keys=True)).encode())
+    texts['sailboat_coloros_ux_build.h'] = ('/* SPDX-License-Identifier: GPL-2.0-only */\n'
+        '#define SAILBOAT_COLOROS_UX_SOURCE_ID "' + source_id + '"\n')
     obj = 'obj-$(CONFIG_OPLUS_SCHED_ASSIST)' if builtin else 'obj-m'
-    target = 'sailboat_sched_assist' if builtin else 'sail_sched_assist'
+    target = 'sailboat_sched_assist'
     texts['Makefile'] = obj + ' += ' + target + '.o\n' + target + '-y := ' + ' '.join(name + '.o' for name in OBJECTS) + '\nccflags-y += -I$(srctree)/ -I$(srctree)/kernel/sched -I$(src)\n'
     outputs = {name: digest(text.encode()) for name, text in texts.items()}
-    stamp = {'profile': 'sailboat_coloros_ux_min', 'upstream_sha': source_sha,
+    stamp = {'profile': 'sailboat_coloros_ux_min', 'upstream_sha': source_sha, 'source_id': source_id,
              'adapter_sha256': adapter_hash, 'port_sha256': port_hashes, 'builtin': builtin,
              'original_sha256': originals, 'output_sha256': outputs}
     for name, text in texts.items():

@@ -55,7 +55,11 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn('android_vh_exit_signal', registered)
         self.assertNotIn('post_init_entity_util_avg', registered)
         self.assertNotIn('wake_up_new_task', registered)
-        self.assertIn('return -EOPNOTSUPP;', sa)
+        self.assertNotIn('return -EOPNOTSUPP;', sa)
+        self.assertIn('sailboat_coloros_ux_reside();', sa)
+        self.assertIn('return sailboat_coloros_ux_init_failed(ret);', sa)
+        self.assertLess(sa.index('sailboat_coloros_ux_reside();'), sa.index('sched_assist_init_oplus_rq();'))
+        self.assertNotIn('module_exit(', sa)
         self.assertIn('set_next_entity(cfs_rq, *se);', (self.out / 'sa_fair.c').read_text())
         self.assertIn('RB_CLEAR_NODE(&ots->exec_time_node)', (self.out / 'sa_priority.c').read_text())
         self.assertIn('sailboat_coloros_ux.o', (self.out / 'Makefile').read_text())
@@ -133,6 +137,7 @@ class AdapterTests(unittest.TestCase):
         common.rename(target_common)
         env['DEFCONFIG'] = str(target_common / 'arch/arm64/configs/gki_defconfig')
         env['CUSTOM_EXTERNAL_MODULE_STAGE'] = 'after_patch'
+        env['SAILBOAT_UX_BUILD_MODE'] = 'module'
         for _ in range(2):
             result = subprocess.run(['bash', str(ROOT / 'setup.sh')], env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -141,7 +146,10 @@ class AdapterTests(unittest.TestCase):
         result = subprocess.run(['bash', str(ROOT / 'setup.sh')], env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('CONFIG_OPLUS_SCHED_ASSIST=y', pathlib.Path(env['DEFCONFIG']).read_text())
+        lines = pathlib.Path(env['DEFCONFIG']).read_text().splitlines()
+        self.assertEqual([line for line in lines if line.startswith('CONFIG_OPLUS_SCHED_ASSIST=')],
+                         ['CONFIG_OPLUS_SCHED_ASSIST=m'])
+        self.assertIn('tristate', (target_common / 'drivers/sailboat_sched_assist/Kconfig').read_text())
         self.assertEqual((target_common / 'drivers/Makefile').read_text().count('sailboat_sched_assist/'), 1)
         init = (target_common / 'drivers/sailboat_sched_assist/sched_assist.c').read_text()
         self.assertNotIn('enable_sched_assist(OPLUS_UX_HOOK_MASK)', init)
@@ -173,11 +181,22 @@ class AdapterTests(unittest.TestCase):
             start, _, end = module.span(source, name)
             fragments.append(source[start:end])
         (output / 'extracted_ux_paths.h').write_text('\n\n'.join(fragments) + '\n')
+        lifecycle = []
+        for file, name in [('sailboat_coloros_ux.c', 'sailboat_coloros_ux_reside'),
+                           ('sailboat_coloros_ux.c', 'sailboat_coloros_ux_init_stage'),
+                           ('sailboat_coloros_ux.c', 'sailboat_coloros_ux_init_failed'),
+                           ('sailboat_coloros_ux.c', 'sailboat_coloros_ux_publish_ready'),
+                           ('sched_assist.c', 'register_scheduler_vendor_hooks'),
+                           ('sched_assist.c', 'oplus_sched_assist_init')]:
+            source = (self.out / file).read_text()
+            start, _, end = module.span(source, name)
+            lifecycle.append(source[start:end])
+        (output / 'extracted_ux_lifecycle.h').write_text('\n\n'.join(lifecycle) + '\n')
         query = (self.out / 'sa_sysfs.c').read_text()
         self.assertIn('global_ux_task_pid = pid;\n\t\t\treturn count;', query)
         self.assertIn('char opt_str[OPT_STR_MAX][13]', query)
         self.assertIn('clear all ux type but animator type', query)
-        self.assertIn('sailboat_coloros_ux_min: init failed', (self.out / 'sched_assist.c').read_text())
+        self.assertIn('sailboat_coloros_ux_init_failed(ret)', (self.out / 'sched_assist.c').read_text())
 
 
 if __name__ == '__main__':

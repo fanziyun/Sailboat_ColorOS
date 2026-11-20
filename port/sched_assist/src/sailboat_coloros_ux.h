@@ -27,6 +27,9 @@ enum sailboat_coloros_ux_counter {
 };
 
 void sailboat_coloros_ux_note(enum sailboat_coloros_ux_counter counter);
+void sailboat_coloros_ux_reside(void);
+void sailboat_coloros_ux_init_stage(enum sailboat_coloros_ux_init_stage stage);
+int sailboat_coloros_ux_init_failed(int error);
 spinlock_t *sailboat_coloros_ux_rq_lock(int cpu);
 int sailboat_coloros_ux_prepare(void);
 int sailboat_coloros_ux_publish_ready(void);

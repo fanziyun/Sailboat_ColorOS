@@ -8,7 +8,7 @@ import struct
 import zipfile
 
 
-def elf_metadata(data):
+def elf_metadata(data, expected_name="sailboat_coloros_hans"):
     if len(data) < 64 or data[:7] != b"\x7fELF\x02\x01\x01":
         raise ValueError("expected ELF64 little-endian module")
     header = struct.unpack_from("<16sHHIQQQIHHHHHH", data)
@@ -37,7 +37,7 @@ def elf_metadata(data):
         raise ValueError("missing modinfo or symbol versions")
     modinfo = result[".modinfo"].decode("ascii").split("\0")
     fields = dict(entry.split("=", 1) for entry in modinfo if "=" in entry)
-    if fields.get("name") != "sailboat_coloros_hans":
+    if fields.get("name") != expected_name:
         raise ValueError("wrong module name")
     vermagic = fields.get("vermagic", "")
     if not vermagic.startswith("5.15.") or "modversions" not in vermagic:

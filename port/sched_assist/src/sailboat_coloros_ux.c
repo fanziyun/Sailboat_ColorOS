@@ -2,6 +2,7 @@
 #include <linux/atomic.h>
 #include <linux/cred.h>
 #include <linux/mutex.h>
+#include <linux/module.h>
 #include <linux/percpu.h>
 #include <linux/proc_fs.h>
 #include <linux/sched/signal.h>
@@ -11,6 +12,7 @@
 #include "sa_priority.h"
 #include "sailboat_coloros_nodes.h"
 #include "sailboat_coloros_ux.h"
+#include "sailboat_coloros_ux_build.h"
 
 #if IS_ENABLED(CONFIG_OPLUS_SYSTEM_KERNEL_QCOM) || IS_ENABLED(CONFIG_SCHED_WALT)
 #error "sailboat_coloros_ux_min requires the audited non-Oplus-WALT hook profile"
@@ -19,6 +21,16 @@
 static DEFINE_PER_CPU(spinlock_t, sailboat_coloros_ux_locks);
 static DEFINE_MUTEX(sailboat_coloros_ux_control);
 static bool sailboat_coloros_ux_ready;
+static bool sailboat_coloros_ux_resident;
+static int sailboat_coloros_init_state;
+static int sailboat_coloros_init_errno;
+static int sailboat_coloros_init_stage;
+module_param_named(init_state, sailboat_coloros_init_state, int, 0444);
+module_param_named(init_errno, sailboat_coloros_init_errno, int, 0444);
+module_param_named(init_stage, sailboat_coloros_init_stage, int, 0444);
+static char sailboat_coloros_source_id[] = SAILBOAT_COLOROS_UX_SOURCE_ID;
+module_param_string(source_id, sailboat_coloros_source_id, sizeof(sailboat_coloros_source_id), 0444);
+MODULE_INFO(sailboat_ux_source_id, SAILBOAT_COLOROS_UX_SOURCE_ID);
 static atomic64_t sailboat_coloros_ux_counters[SAILBOAT_UX_COUNTERS];
 static const char * const sailboat_coloros_ux_counter_names[] = {
 	"enqueue", "dequeue", "selected", "runtime", "expired", "rejected",
@@ -28,6 +40,33 @@ static const char * const sailboat_coloros_ux_counter_names[] = {
 void sailboat_coloros_ux_note(enum sailboat_coloros_ux_counter counter)
 {
 	atomic64_inc(&sailboat_coloros_ux_counters[counter]);
+}
+
+void sailboat_coloros_ux_reside(void)
+{
+#ifdef MODULE
+	/* sailboat_coloros_ux_module: RVH callbacks have no unregister operation. */
+	__module_get(THIS_MODULE);
+#endif
+	WRITE_ONCE(sailboat_coloros_ux_resident, true);
+}
+
+void sailboat_coloros_ux_init_stage(enum sailboat_coloros_ux_init_stage stage)
+{
+	WRITE_ONCE(sailboat_coloros_init_stage, stage);
+}
+
+int sailboat_coloros_ux_init_failed(int error)
+{
+	WRITE_ONCE(global_sched_assist_enabled, 0);
+	WRITE_ONCE(sailboat_coloros_init_errno, error);
+	WRITE_ONCE(sailboat_coloros_init_state, -1);
+	smp_store_release(&sailboat_coloros_ux_ready, false);
+	pr_err("sailboat_coloros_ux_min: FAILED stage=%d error=%d resident=%u; reboot required\n",
+		READ_ONCE(sailboat_coloros_init_stage), error,
+		READ_ONCE(sailboat_coloros_ux_resident));
+	return sailboat_coloros_ux_init_result(
+		READ_ONCE(sailboat_coloros_ux_resident), error);
 }
 
 spinlock_t *sailboat_coloros_ux_rq_lock(int cpu)
@@ -62,8 +101,11 @@ int sailboat_coloros_ux_prepare(void)
 
 int sailboat_coloros_ux_publish_ready(void)
 {
+	if (READ_ONCE(sailboat_coloros_init_state) < 0)
+		return -EIO;
 	if (atomic64_read(&sailboat_coloros_ux_counters[SAILBOAT_UX_ALLOC_FAILED]))
 		return -ENOMEM;
+	WRITE_ONCE(sailboat_coloros_init_state, 1);
 	smp_store_release(&sailboat_coloros_ux_ready, true);
 	return 0;
 }
@@ -189,6 +231,9 @@ static int sailboat_coloros_ux_status_show(struct seq_file *file, void *unused)
 	seq_printf(file, "profile=sailboat_coloros_ux_min ready=%u active=%d hot_disable=0\n",
 		smp_load_acquire(&sailboat_coloros_ux_ready),
 		READ_ONCE(global_sched_assist_enabled));
+	seq_printf(file, "init_state=%d init_errno=%d init_stage=%d resident=%u\n",
+		READ_ONCE(sailboat_coloros_init_state), READ_ONCE(sailboat_coloros_init_errno),
+		READ_ONCE(sailboat_coloros_init_stage), READ_ONCE(sailboat_coloros_ux_resident));
 	for (index = 0; index < SAILBOAT_UX_COUNTERS; index++)
 		seq_printf(file, "%s=%lld\n", sailboat_coloros_ux_counter_names[index],
 			(long long)atomic64_read(&sailboat_coloros_ux_counters[index]));

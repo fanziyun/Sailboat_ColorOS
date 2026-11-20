@@ -13,6 +13,20 @@ enum sailboat_coloros_ux_candidate {
 	SAILBOAT_UX_PICK,
 };
 
+enum sailboat_coloros_ux_init_stage {
+	SAILBOAT_UX_PREFLIGHT,
+	SAILBOAT_UX_RQ_INIT,
+	SAILBOAT_UX_OEM_INIT,
+	SAILBOAT_UX_HOOK_INIT,
+	SAILBOAT_UX_PROC_INIT,
+	SAILBOAT_UX_READY_INIT,
+};
+
+static inline int sailboat_coloros_ux_init_result(int resident, int error)
+{
+	return resident ? 0 : error;
+}
+
 static inline int sailboat_coloros_ux_transition(int ready, int active, int value)
 {
 	if (value != 0 && value != 1)
