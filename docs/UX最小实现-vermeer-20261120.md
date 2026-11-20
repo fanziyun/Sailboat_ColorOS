@@ -16,7 +16,7 @@ Profile：`sailboat_coloros_ux_min`。目标为 android13-5.15 的 ABK 内建实
 
 | 操作/状态 | 行为 |
 |---|---|
-| 启动默认 | OFF；完成必要资源、hook和proc初始化后发布ready |
+| 启动默认 | 2026-11-21 起 ON（combined profile）；完成必要资源、hook和proc初始化后发布ready并开启 |
 | 未ready/OFF写UX | 拒绝；不积累等待开启补扫的标签 |
 | root写 enabled=1 | ready且初始资源完整时开启FEATURE_COMMON |
 | ACTIVE重复写1 | 幂等 |
@@ -96,6 +96,45 @@ Profile：`sailboat_coloros_ux_min`。目标为 android13-5.15 的 ABK 内建实
 **这个ko仅用于编译检查，MODULE入口明确拒绝加载；不打包安装，不与当前内建sched_assist共存。** 交付目标是ABK源码注入；KSU loader新增已有sched_assist目录时跳过同类ko的防护，不改变其其他boost策略。
 
 离线内建对象检查也已通过：`out/build/ux_min_builtin_20261120_03/built-in.a`，SHA256为`408c563acae1e4bad3c1ff0331ad09387cc4265402b45c0de06eedfcb8bf22b9`。10个对象均以不带MODULE的内建模式编译，包含修复后的真实初始化路径；这不是靠MODULE拒载分支才编过。复现可将`SAILBOAT_BUILTIN_CHECK=1`传给同一构建脚本；该对象仍不是可刷入boot镜像。
+
+## 本地 ko 编译与 KSU 打包（2026-11-20）
+
+分工：ABK 只构建内核底座，`.ko` 编译与 KSU 打包在本地完成（见 `docs/ABK-集成.md`）。
+
+底座：ABK run `44683587474`，headSha `d6c4c5482ea5983f858e0cae57a04d96056a38dd`，release `5.15.225-Sailboat-ColorOS-UXmodBase-20261120`，`CONFIG_OPLUS_SCHED_ASSIST=m`。材料 artifact `14606477924`（831,935,852 B，sha256 `e550cf005e9aec837412021a3bfad5761fe06f203aaeaf5a80167b0732f4a0e4`），内含 `kernel-build-materials.tar.gz`（`common` 源码 + `out/android13-5.15/common`，已剔除 `*.o/*.a/*.ko/*.cmd/*.d`）。比对用 `Image` 取自同一 run 的 AnyKernel3 包，sha256 `c8f7403506bfacd94bb9cc5bd1b9c1aad1f82eea9eeaa5e2de2b5991d5d795f7`。
+
+链路（一条命令串起三步）：
+
+```bash
+SAILBOAT_CLANG_BIN=<clang-r450784e/bin> bash scripts/wsl/build_local_ux.sh \
+  <kernel-build-materials.tar.gz> <dist 目录，含 Image> <workspace>
+```
+
+1. `scripts/prepare_ci_target.py` 解包 85,777 个条目（2.46 GB）。只把构建路径改到本地：`CONFIG_UNUSED_KSYMS_WHITELIST` 指向解包出的 `abi_symbollist.raw`、`out/Makefile` 改为 include 本地 `common/Makefile`、重建 `out/source` 链接；原配置另存 `original-kernel.config`（sha256 `e8a4bdec562244d8d8c60530b1dc0914a5fc6f01f830f4932a6de95881a5577a`）。不改任何功能配置，8 个指向源码树外的符号链接被跳过。
+2. `scripts/wsl/build_sched_assist.sh` 用 r450784e 编译 10 个对象，跑内核自带的严格 modpost（`out/android13-5.15/common/scripts/mod/modpost`），**115 项 symbol CRC 逐项匹配底座 `Module.symvers`，覆盖 114 个强导入加 `module_layout`**。BTF 阶段（pahole v1.31）通过，CFI 与 Thin LTO 保持开启。
+3. `scripts/collect_ux_build.py --no-sdk` 核对底座后调用 `scripts/package_ux.py` 产出 KSU zip。
+
+模块：sha256 `0c68e8274052407eb28fa387d8e40b66c1583a613facc2a04adb541da56ce933`，3,602,144 B，vermagic `5.15.225-Sailboat-ColorOS-UXmodBase-20261120 SMP preempt mod_unload modversions aarch64`，`source_id` `07d58dcab23b8d4bac1ceab19987e15eb1a018657cf9b357833a4a72894268d5`。
+
+KSU 包：`Sail_UX-5.15.225-Sailboat-ColorOS-UXmodBase-20261120.zip`，983,214 B，sha256 `6ae61d6632f22a96eb5e4629cb75689f16a493991c9150c6cfc3411aba9e73e2`。内含 5 个模板脚本（`*.sh` 0755）、`ux.manifest` 与 `lib/modules/sailboat_sched_assist.ko`。manifest 记录 `target_release`/`ko_sha256`/`notes_sha256`/`source_id`/`target_build_verified=1`；设备侧加载前逐项校验 `uname -r`、`/sys/kernel/notes` 摘要、ko 摘要与 `/sys/module/sailboat_sched_assist/parameters/source_id`。
+
+核对口径（任一不过即拒绝打包，全部通过）：模块 vermagic 首段等于 Image 的 release；`__versions` 每一项与底座 `Module.symvers` 一致；Image 内嵌配置仍为 `CONFIG_OPLUS_SCHED_ASSIST=m`；vmlinux 不含 `oplus_replace_next_task_fair` 等 SA 符号；Image 内不含 UX 实现标记；`sa_config=m` 与 `-UXmodBase-` 均在位。
+
+产物与记录：`out/build/ux_modbase_20261120T065901Z/`（编译全过程）与 `out/ux_local_44683587474.1eYtZ0/ko_ksu/`（zip、ko、`target-build.json`、imports、config）。
+
+**未刷机、未 insmod、未启用 UX。** 当前手机仍是旧内建 SA 内核，`uxctl.sh` 的身份校验会拒绝它。
+
+> 后续更新（同日）：已完成一次性试启动 + insmod + 启用 + 打标签，模块侧全部正常，但触发内核 panic，见上方「真机 panic」一节。
+
+## 真机 panic 与加固（2026-11-20）
+
+初版 ko 在 `-UXmodBase-` 底座上 insmod/init/启用/打标签全部正常，但 UI 负载下触发内核 panic。完整分析、定位、控制实验与加固见 [UX 真机 panic](UX真机panic-20261120.md)。
+
+一句话结论：`sailboat_coloros_ux_pick()` 现在只允许候选与正在被换下的任务（`rq->curr`）处在**同一个 `cfs_rq`**，使上游 `set_next_entity()` 只作用在单层；约束不满足走 SKIP，不再从 UX 链表摘除候选。
+
+真机复验（内核已用系统内 `dd` 持久化刷入 `boot_a`）：模块 active 约 393 秒持续滚动 + 应用切换，`enqueue=7478 dequeue=7478 selected=3495 runtime=2683 rejected=0 alloc_failed=0`，`dmesg` 无 `Internal error`/`Kernel panic`/`kernel BUG at`/`Call trace`，设备未重启。**根因仍未定案**——约束是绕开触发条件，不是修掉 `abk_pick_eevdf()` 的空树返回。
+
+上面「本地 ko 编译与 KSU 打包」一节的**编译与打包链路本身没问题**，仍有效；但那一节记录的 ko/zip 哈希是加固前的版本，已作废，以 `docs/UX真机panic-20261120.md` 和本次构建目录为准。
 
 ## 设备原样拒载测试（2026-11-20）
 

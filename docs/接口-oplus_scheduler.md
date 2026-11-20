@@ -2,7 +2,7 @@
 
 日期：2026-11-15 的接口清单，2026-11-20 已增加最小 profile。
 
-本文件保留早期节点/消费者记录。**当前 `sailboat_coloros_ux_min` 不再对未实现后端伪报成功**：audio/tpd/sched_prop返回`-EOPNOTSUPP`，disable_setting接真实门禁，并新增ux_status；默认OFF且拒绝热关闭。当前控制协议和验证状态以 [UX 最小实现](UX最小实现-vermeer-20261120.md) 为准。下表中的“占位”表示后端缺失，不表示当前写入成功。
+本文件保留早期节点/消费者记录。**当前 `sailboat_coloros_ux_min` 不再对未实现后端伪报成功**：audio/tpd/sched_prop返回`-EOPNOTSUPP`，disable_setting接真实门禁，并新增ux_status；2026-11-21 起默认ON且拒绝热关闭。当前控制协议和验证状态以 [UX 最小实现](UX最小实现-vermeer-20261120.md) 为准。下表中的“占位”表示后端缺失，不表示当前写入成功。
 
 证据来源：
 

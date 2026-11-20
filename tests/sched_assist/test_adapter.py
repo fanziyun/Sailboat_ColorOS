@@ -151,6 +151,13 @@ class AdapterTests(unittest.TestCase):
                          ['CONFIG_OPLUS_SCHED_ASSIST=m'])
         self.assertIn('tristate', (target_common / 'drivers/sailboat_sched_assist/Kconfig').read_text())
         self.assertEqual((target_common / 'drivers/Makefile').read_text().count('sailboat_sched_assist/'), 1)
+        driver = target_common / 'drivers/sailboat_sched_assist'
+        self.assertIn('sailboat_coloros_ux_pick(rq, prev, p, se, repick);', (driver / 'sa_fair.c').read_text())
+        self.assertIn('bool simple, struct task_struct *prev);', (driver / 'sa_fair.h').read_text())
+        fair = (driver / 'sa_fair.c').read_text()
+        self.assertIn('bool simple, struct task_struct *prev)', fair)
+        self.assertIn('oplus_replace_next_task_fair(rq, p, se, repick, simple, prev);', fair)
+        self.assertNotIn('sailboat_coloros_ux_pick(rq, p, se, repick);', fair)
         init = (target_common / 'drivers/sailboat_sched_assist/sched_assist.c').read_text()
         self.assertNotIn('enable_sched_assist(OPLUS_UX_HOOK_MASK)', init)
         late_config = pathlib.Path(env['DEFCONFIG'])
@@ -181,6 +188,12 @@ class AdapterTests(unittest.TestCase):
             start, _, end = module.span(source, name)
             fragments.append(source[start:end])
         (output / 'extracted_ux_paths.h').write_text('\n\n'.join(fragments) + '\n')
+        pick = []
+        for name in ('sailboat_coloros_ux_hierarchy', 'sailboat_coloros_ux_pick'):
+            source = (self.out / 'sailboat_coloros_ux.c').read_text()
+            start, _, end = module.span(source, name)
+            pick.append(source[start:end])
+        (output / 'extracted_ux_pick.h').write_text('\n\n'.join(pick) + '\n')
         lifecycle = []
         for file, name in [('sailboat_coloros_ux.c', 'sailboat_coloros_ux_reside'),
                            ('sailboat_coloros_ux.c', 'sailboat_coloros_ux_init_stage'),

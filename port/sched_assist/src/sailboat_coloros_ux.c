@@ -174,10 +174,12 @@ static bool sailboat_coloros_ux_hierarchy(struct task_struct *task)
 	return true;
 }
 
-void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct **task,
-		struct sched_entity **entity, bool *repick)
+void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct *prev,
+		struct task_struct **task, struct sched_entity **entity, bool *repick)
 {
 	struct oplus_rq *orq = (struct oplus_rq *)rq->android_oem_data1;
+	struct task_struct *outgoing = prev;
+	struct cfs_rq *outgoing_cfs;
 	struct rb_node *node;
 	unsigned long flags;
 	unsigned int scanned = 0;
@@ -185,12 +187,24 @@ void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct **task,
 	if (!READ_ONCE(global_sched_assist_enabled))
 		return;
 	lockdep_assert_rq_held(rq);
+	if (!outgoing)
+		return;
+	if (outgoing == rq->idle) {
+		outgoing_cfs = NULL;
+	} else {
+		if (!test_task_is_fair(outgoing))
+			return;
+		outgoing_cfs = cfs_rq_of(&outgoing->se);
+		if (!outgoing_cfs)
+			return;
+	}
 	spin_lock_irqsave(orq->ux_list_lock, flags);
 	node = rb_first_cached(&orq->ux_list);
 	while (node && scanned++ < 64) {
 		struct oplus_task_struct *ots = rb_entry(node,
 			struct oplus_task_struct, ux_entry);
 		struct task_struct *candidate = ots_to_ts(ots);
+		bool same_cfs = true;
 		int decision;
 
 		node = rb_next(node);
@@ -202,9 +216,12 @@ void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct **task,
 		if (task_cpu(candidate) == cpu_of(rq) && task_rq(candidate) == rq &&
 		    test_task_is_fair(candidate) &&
 		    task_on_rq_queued(candidate) && !task_on_rq_migrating(candidate) &&
-		    get_oplus_task_struct(candidate) == ots)
+		    get_oplus_task_struct(candidate) == ots) {
+			same_cfs = !outgoing_cfs || cfs_rq_of(&candidate->se) == outgoing_cfs;
 			decision = sailboat_coloros_ux_candidate(1, 1, 1, 1,
-				test_task_ux(candidate), sailboat_coloros_ux_hierarchy(candidate));
+				test_task_ux(candidate),
+				same_cfs && sailboat_coloros_ux_hierarchy(candidate));
+		}
 		if (decision == SAILBOAT_UX_STALE) {
 			update_ux_timeline_task_removal(orq, ots);
 			put_task_struct(candidate);

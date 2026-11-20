@@ -157,7 +157,7 @@ def adapt(out, port, kernel, source_sha, builtin, config=None):
                 raise ValueError(f'modified adapted file: {name}')
         return stamp
     names = ['sched_assist.c', 'sa_common.c', 'sa_common.h', 'sa_fair.c',
-             'sa_oemdata.c', 'sa_priority.c', 'sa_sysfs.c']
+             'sa_fair.h', 'sa_oemdata.c', 'sa_priority.c', 'sa_sysfs.c']
     texts = {name: (out / name).read_text(encoding='utf-8') for name in names}
     originals = {name: digest(text.encode()) for name, text in texts.items()}
     for name in ['sched_assist.c', 'sa_common.c', 'sa_fair.c', 'sa_oemdata.c', 'sa_priority.c', 'sa_sysfs.c']:
@@ -165,6 +165,15 @@ def adapt(out, port, kernel, source_sha, builtin, config=None):
     for name in ['sa_common.c', 'sa_fair.c']:
         texts[name] = sub(texts[name], '#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>', '#include "frame_group.h"')
     texts['sa_common.h'] = sub(texts['sa_common.h'], '#define OTS_IDX\t\t\t0', '#define OTS_IDX\t\t\t2')
+    texts['sa_fair.c'] = sub(texts['sa_fair.c'],
+        'void oplus_replace_next_task_fair(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick, bool simple)',
+        'void oplus_replace_next_task_fair(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick, bool simple, struct task_struct *prev)')
+    texts['sa_fair.h'] = sub(texts['sa_fair.h'],
+        'void oplus_replace_next_task_fair(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick, bool simple);',
+        'void oplus_replace_next_task_fair(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick, bool simple, struct task_struct *prev);')
+    texts['sa_fair.c'] = sub(texts['sa_fair.c'],
+        'oplus_replace_next_task_fair(rq, p, se, repick, simple);',
+        'oplus_replace_next_task_fair(rq, p, se, repick, simple, prev);')
 
     text = texts['sched_assist.c']
     text = sub(text, 'static void android_rvh_wake_up_new_task_handler', 'static __maybe_unused void android_rvh_wake_up_new_task_handler')
@@ -232,7 +241,7 @@ fail:
     text = in_function(text, 'test_task_ux', '(ots->total_exec > limit)', '(ots->total_exec >= limit)')
     texts['sa_common.c'] = text
     texts['sa_common.c'] = in_function(texts['sa_common.c'], 'set_im_flag_with_bit', '\tif (im_flag < 0)', '\tif (!sailboat_coloros_ux_imflag_valid(im_flag, IM_FLAG_CLEAR, BITS_PER_LONG))')
-    texts['sa_fair.c'] = body(texts['sa_fair.c'], 'oplus_replace_next_task_fair', '\tsailboat_coloros_ux_pick(rq, p, se, repick);')
+    texts['sa_fair.c'] = body(texts['sa_fair.c'], 'oplus_replace_next_task_fair', '\tsailboat_coloros_ux_pick(rq, prev, p, se, repick);')
 
     text = texts['sa_oemdata.c']
     anchor = 'static inline struct oplus_task_struct *alloc_oplus_task_struct_node(int node)'
@@ -395,8 +404,8 @@ struct oplus_task_struct *sailboat_coloros_ux_ensure_ots(struct task_struct *tas
              'adapter_sha256': adapter_hash, 'port_sha256': port_hashes, 'builtin': builtin,
              'original_sha256': originals, 'output_sha256': outputs}
     for name, text in texts.items():
-        (out / name).write_text(text, encoding='utf-8')
-    stamp_path.write_text(json.dumps(stamp, indent=2) + '\n', encoding='utf-8')
+        (out / name).write_bytes(text.encode('utf-8'))
+    stamp_path.write_bytes((json.dumps(stamp, indent=2) + '\n').encode('utf-8'))
     return stamp
 
 

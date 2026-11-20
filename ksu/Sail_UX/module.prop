@@ -1,6 +1,6 @@
 id=Sail_UX
 name=Sail UX module test
-version=0.9.0-test
-versionCode=900
+version=0.9.1-test
+versionCode=901
 author=Sailboat
-description=Matched no-SA kernel required. Loads once per boot; UX defaults OFF. No hot unload, frequency boost or RT policy.
+description=Matched no-SA kernel required. Loads once per boot; UX and animation boost default ON. No hot unload; RT policy not included.

@@ -77,7 +77,7 @@ load() {
   rc=$?
   [ "$rc" = 0 ] || { fail "insmod failed rc=$rc; no forced retry"; return 1; }
   ready || return 1
-  say 'Sail_UX: module READY; policy defaults OFF; cannot hot-unload'
+  say 'Sail_UX: module READY; policy defaults ON; cannot hot-unload'
   if [ -f "$MODDIR/enable_ux_on_boot" ]; then
     enable || return 1
   fi

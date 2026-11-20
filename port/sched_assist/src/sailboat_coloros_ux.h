@@ -36,6 +36,6 @@ int sailboat_coloros_ux_publish_ready(void);
 int sailboat_coloros_ux_set_enabled(int value);
 int sailboat_coloros_ux_write_gate(bool system_only);
 int sailboat_coloros_ux_status_init(struct proc_dir_entry *parent);
-void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct **task,
-		struct sched_entity **entity, bool *repick);
+void sailboat_coloros_ux_pick(struct rq *rq, struct task_struct *prev,
+		struct task_struct **task, struct sched_entity **entity, bool *repick);
 #endif

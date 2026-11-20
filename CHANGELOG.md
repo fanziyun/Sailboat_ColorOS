@@ -1,13 +1,19 @@
 # Changelog
 
 ## 0.8.0 — 2026-11-20
-
+- **真机 panic → 已加固并在真机复验通过（2026-11-20）**：初版 ko 在 `-UXmodBase-` 底座上 insmod/init/启用/打标签全部正常，但 UI 负载下触发内核 panic——`pick_next_task_fair+0x1b4` 里 `pick_next_entity()` 返回 NULL，`group_cfs_rq(NULL)` 踩空；厂商 `md_history` 第 123 条独立记录同一次 kpanic。控制实验（同内核、不加载模块、同量级负载）不复现，归因为本模块引发。完整分析见 `docs/UX真机panic-20261120.md`。
+- 加固：`sailboat_coloros_ux_pick()` 只允许候选与正在被换下的任务（`rq->curr`）处在同一个 `cfs_rq`，使上游的 `set_next_entity()` 只作用在单层；约束不满足走 SKIP 而不是从 UX 链表摘除（第一版误并入"过期"判定，导致 `rejected` 虚高而 `enqueue` 不动，已修）。
+- 复验结果：模块 active 约 358 秒持续滚动 + 应用切换，`enqueue=7000 dequeue=7000 selected=3396 runtime=2535 rejected=0 alloc_failed=0`，`dmesg` 无 `Internal error`/`Kernel panic`/`kernel BUG at`/`Call trace`，设备未重启。代价是约 64% 候选因 cgroup 不符被跳过（`hierarchy_skipped` 12643）。
+- 刷入方式改为系统内 `dd` 写 `boot_a`（不再重启进 bootloader），写入后按 md5 校验，备份与一键回滚脚本随设备保留。
+- **根因仍未定案**：约束绕开了触发条件，没有证明 `abk_pick_eevdf()` 空树返回的来源；要定案需 minidump 或模块内加断言重跑。
 - 新增 `sailboat_coloros_ux_min`：补齐任务入出队、本 rq 合法候选、唤醒抢占、运行额度与真实状态计数；保留5.15/EEVDF切换契约，不迁入6.18框架或叠加RT、调频和FrameBoost。
 - 修复OTS逐次初始化和并发安装、生命周期hook部分注册失败清理、ONCE额度耗尽后睡眠清除，以及文本/ioctl标签读改写的锁范围。
 - 默认OFF，ready后仅root可显式开启；首版拒绝热关闭，回滚依靠重启/旧boot。MODULE入口明确拒载，禁止与现有内建实现重复注册。
 - ABK与离线构建共用固定SHA适配器；校验实际源码、配置、hook形态、幂等和完整符号CRC，未实现接口不再伪报成功。
 - 验证：9项Python回归及host C/ASan/UBSan路径测试通过；5.15.202/r450784e下模块形态和真实内建路径均可编译，104项SDK CRC逐项匹配。目标5.15.225配置/hook形态通过；完整目标内核和UX真机调度仍待构建验证。
 - 设备仅执行保留保护的单次原样insmod，按入口设计拒载，未开启UX；该结果不是调度运行验证。详见 `docs/UX最小实现-vermeer-20261120.md`。
+- **本地按匹配底座编出可加载 ko 并打包 KSU（2026-11-20 追加）**：ABK run `44683587474` 产出 `CONFIG_OPLUS_SCHED_ASSIST=m` 的 `5.15.225-Sailboat-ColorOS-UXmodBase-20261120` 底座，本地用 r450784e 编译 `sailboat_sched_assist.ko`（sha256 `0c68e827…`，115 项 CRC 逐项匹配底座 `Module.symvers`），并打包 `Sail_UX-…-UXmodBase-20261120.zip`（sha256 `6ae61d66…`）。链路为 `scripts/wsl/build_local_ux.sh` + `scripts/prepare_ci_target.py` + `scripts/fetch_ci_artifact.py`；ABK 仍只构建内核，不编译 ko、不打包 KSU。
+- 修掉适配器在 Windows 下因文本模式换行转换把字节哈希与磁盘内容对不上的问题（改为按字节写盘），幂等回归由失败恢复为通过。
 
 ## 0.7.0 — 2026-11-17
 

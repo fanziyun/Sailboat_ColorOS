@@ -47,6 +47,25 @@
 Linux version 5.15.223-Sailboat-20261118 (build-user@build-host) ... #1 SMP PREEMPT Wed Nov 18 03:49:43 UTC 2026
 ```
 
+## 模块形态底座（ABK 只构建内核）
+
+`sailboat_ux_build_mode=module` 时 ABK 只做一件事：产出**不带 sched_assist 的内核底座**，并把本地编译 `.ko` 所需的内核材料作为 artifact 上传。ABK 不编译 `.ko`、不打包 KSU、不验证模块——这两步在本地完成。
+
+- `CONFIG_OPLUS_SCHED_ASSIST=m`，Image 内不含 sched_assist 符号。
+- release 追加 `-UXmodBase-` 标记，例如 `5.15.225-Sailboat-ColorOS-UXmodBase-20261120`，与内建形态区分。
+- 上传物为 `common` 源码树 + `out/android13-5.15/common`（剔除 `*.o/*.a/*.ko/*.cmd/*.d`），含 `.config`、`Module.symvers`、`vmlinux`、`System.map`、`abi_symbollist.raw`。
+
+本地链路（见 `docs/UX最小实现-vermeer-20261120.md`）：
+
+```bash
+python -I scripts/fetch_ci_artifact.py <artifact_id> out/.../materials.zip   # 需要 gh 或 SAILBOAT_GH_TOKEN
+unzip -o out/.../materials.zip -d out/.../materials                          # 取出内层 kernel-build-materials.tar.gz
+SAILBOAT_CLANG_BIN=<clang bin> bash scripts/wsl/build_local_ux.sh \
+  out/.../materials/kernel-build-materials.tar.gz out/.../dist <workspace>
+```
+
+`build_local_ux.sh` 依次调用 `scripts/prepare_ci_target.py`（解包并只重定位构建路径）、`scripts/wsl/build_sched_assist.sh`（编译 + 严格 modpost + 逐项 CRC 核对）、`scripts/collect_ux_build.py --no-sdk`（核对底座并打包 KSU）。
+
 ## 未验证与风险
 
 - 产物未刷机、未在真机启动验证；`sched_assist_enabled` 默认 0，节点存在但调度路径未启用。
