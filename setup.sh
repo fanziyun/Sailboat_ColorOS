@@ -52,6 +52,7 @@ inject_after_patch() {
   if [ "$UX_MODE" = builtin ]; then
     local combined
     combined="$(mktemp -d "$KROOT/common/drivers/.sailboat_coloros_ux.XXXXXX")"
+    rmdir "$combined"
     if ! python3 -I "$ROOT/scripts/prepare_animation_boost.py" --upstream "$SRC_CACHE" \
         --base-sa "$staging" --output "$combined" --builtin; then
       rm -rf "$staging" "$combined"
