@@ -1,8 +1,8 @@
 # /proc/oplus_scheduler 接口清单
 
-日期：2026-11-15　状态：节点已建，其中 5 个是占位实现
+日期：2026-11-15 的接口清单，2026-11-20 已增加最小 profile。
 
-本文件记录 `sched_assist` 暴露给 ColorOS 性能 HAL 的全部接口：路径、权限、写入格式、语义、当前实现到什么程度。**占位节点的行为约定是"接受写入并回显，不返回错误"**，保证 HAL 的 open/write 不再失败；真正的后端逻辑在后面的轮次补。
+本文件保留早期节点/消费者记录。**当前 `sailboat_coloros_ux_min` 不再对未实现后端伪报成功**：audio/tpd/sched_prop返回`-EOPNOTSUPP`，disable_setting接真实门禁，并新增ux_status；默认OFF且拒绝热关闭。当前控制协议和验证状态以 [UX 最小实现](UX最小实现-vermeer-20261120.md) 为准。下表中的“占位”表示后端缺失，不表示当前写入成功。
 
 证据来源：
 
@@ -39,8 +39,8 @@
 | 写入 | 含义 |
 |---|---|
 | `p <pid> <val>` | 设置线程 ux 状态。`val = 128 + 类型位`，`128` 是 `SA_OPT_SET` |
-| `p <pid> 0` | 清除 |
-| `r <pid>` | 选中该 pid，随后 `read()` 返回它的状态 |
+| `p <pid> 0` | 当前 5.15 实现清除其他类型但保留 ANIMATOR，不是无条件全清 |
+| `r <pid>` | 选中该 pid，随后 `read()` 返回它的状态；当前实现即使选中成功也返回 `-EFAULT` |
 
 类型位：`LIGHT 0x1`、`HEAVY 0x2`、`ANIMATOR 0x4`、`LISTPICK 0x8`、`SWIFT 0x4000`、`ONCE 0x8000`、`INHERIT 0x10000`；高位段 `0xXX000000` 是 ux 优先级（`SCHED_ASSIST_UX_PRIORITY_SHIFT = 24`）。
 
@@ -48,7 +48,7 @@
 
 ### 2. `im_flag` — 输入/场景标记
 
-写入 `<cmd> <pid> <flag>`；`flag` 是位掩码（音频、滑动等），供 sched_assist 内部与 uad 联动。读回同 `ux_task` 的格式。
+写入 `<cmd> <pid> <flag>`；当前 5.15 的 `flag` 是线程类别编号或对应清除操作编码，内核用 `set_bit` / `clear_bit` 更新 `im_flag` 位集，**不是直接写入整个掩码**。读回同 `ux_task` 的格式。不同版本的设置/清除差异见 [UX 兼容分析](UX兼容分析-vermeer-5.15.225-20261120.md)。
 
 ### 3. `sched_assist_scene` — 场景位
 

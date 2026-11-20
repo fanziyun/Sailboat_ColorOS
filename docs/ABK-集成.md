@@ -2,6 +2,8 @@
 
 日期：2026-11-18。参考构建：[fanziyun/ABK run 44232649792](https://github.com/fanziyun/ABK/actions/runs/44232649792)。
 
+2026-11-20 状态更新：本文保留上述 **5.15.223 历史构建**的记录。当前真机已运行 `5.15.225-Sailboat-ColorOS-20261118`，只读证据支持 sched_assist 已内建，`enabled=0`；与版本串匹配的构建为 [fanziyun/ABK run 44276746591](https://github.com/fanziyun/ABK/actions/runs/44276746591)。这不等于 UX 调度已启用或验证稳定，完整边界见 [UX 兼容分析](UX兼容分析-vermeer-5.15.225-20261120.md)。
+
 ## 结论
 
 `sched_assist` 已以源码形式注入 ABK 的 `kernel-custom` GKI 构建，编进内核（`built-in.a`），内核名带当天日期。产物：

@@ -1,5 +1,17 @@
 # sched_assist
 
+## 当前最小实现：sailboat_coloros_ux_min（2026-11-20）
+
+当前源码已收敛为显式 UX 核心：任务入出队、合法候选选择、唤醒抢占、运行额度、逐次 OTS 初始化，以及 `ux_status` 真实计数。保留 5.15 simple/group 切换契约，不改 EEVDF；不包含音频、继承、完整选核、RT、调频或 FrameBoost。
+
+默认 OFF，只有 root 可显式开启；OFF 拒绝 UX 修改，开启后写 0 返回 `-EBUSY` 且仍保持开启，回滚需要重启/旧 boot。`p <tid> 0` 仍遵循 5.15 保留 ANIMATOR 的规则，不能当作全清。
+
+构建适配统一在 `scripts/adapt_sched_assist.py`，固定 sm8550 提交 `0241347436d48df011e2a6f6fe2d8740c26a379c`；源码输入逐文件核验，只规范化 CRLF 行尾。ABK `setup.sh` 与离线构建脚本共用规则；临时副本修改，不直接改上游树。
+
+**目标是内建：离线 `.ko` 的 init 明确拒绝加载，不能把它装进已经内建 sched_assist 的当前内核。** 同树同配置编译、真机调度闭环和性能收益分别验收。控制协议、范围及验证记录见 [UX 最小实现](../../docs/UX最小实现-vermeer-20261120.md)；历史根因纠正见 [兼容分析](../../docs/UX兼容分析-vermeer-5.15.225-20261120.md)。
+
+## 早期移植记录（以下不是当前最小 profile 的验收结果）
+
 适用：vermeer（SM8550）`5.15.223-Sailboat-20261105`，ColorOS 17 移植（Android 17 / SDK 37）。
 
 目标节点：`/proc/oplus_scheduler/sched_assist/*`，完整清单与格式见 [`docs/接口-oplus_scheduler.md`](../../docs/接口-oplus_scheduler.md)。
@@ -182,11 +194,11 @@ if (simple && true == *repick) {
 }
 ```
 
-5.15 蓝本用它把挑中的任务从红黑树里摘掉，但 6.18（同样跑 EEVDF 的一加 16）的同一个 handler 里**整段删掉了**（6.18 `sa_fair.c:1015`，连 `se`、`simple` 两个参数都不要了）。本机内核由 ABK 的 `batch15_perf_eevdf.py` 把 `set_next_entity()` 的函数体换成了 EEVDF 版本，从 hook 里越界调用它会破坏 `cfs_rq->curr`/`nr_running`/增强红黑树的一致性，再由 WALT 的 dequeue 断言引爆。
+5.15 蓝本在 simple repick 路径承担实体切换，而6.18的配套核心契约不同。此前将 ABK 的 deadline stash 赋值认定为越界、并据此断言破坏调度状态，证据不足；该判断已撤回。当前保留这段切换，优先修复任务入出队和候选合法性，见2026-11-20兼容分析。
 
 次要嫌疑：`oplus_set_ux_state_lock()` 在 proc 写入上下文里改任务的 ux 优先级/nice，WALT 对任务优先级与 rq 类的一致性有断言。
 
-结论：`sa_fair.c` 不能原样照搬 5.15，需要对着 6.18 逐个 hook 函数比对（`replace_next_task_fair`、`place_entity`、`check_preempt_tick`、`pick_next_entity` 在 6.18 里都改过签名或逻辑）。这条同时也说明：**ABK 的 EEVDF 回移与 5.15 版 OPPO 调度代码在语义上不兼容**，是移植的硬约束，不是可选优化。
+结论更新：历史 panic 的唯一根因尚未复现收口，不能把它概括为“EEVDF 与 UX 必然不兼容”。两代接口需要逐项核对，但本次最小实现保留5.15核心契约，不移植半套6.18切换逻辑。
 
 ## 未完成
 

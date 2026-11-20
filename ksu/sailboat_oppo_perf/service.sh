@@ -12,6 +12,14 @@ insmod_one() {
   local ko="$1"
   local name
   name=$(basename "$ko")
+  case "$name" in
+    *sched_assist*.ko)
+      if [ -d /proc/oplus_scheduler/sched_assist ]; then
+        echo "skip $name: sched_assist already present" >>"$LOG"
+        return 0
+      fi
+      ;;
+  esac
   if insmod "$ko" 2>>"$LOG"; then
     echo "ok $name" >>"$LOG"
   else

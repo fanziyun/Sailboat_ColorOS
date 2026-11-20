@@ -1,62 +1,76 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-REPO=/mnt/h/Sailboat_ColorOS
-SRC="$REPO/src_upstream/oplus_sm8550/vendor/oplus/kernel/cpu/sched"
-OUT="$REPO/out/build/sched_assist"
-KDIR=/home/fanziyun/ddk-android13-5.15-20260313/opt/ddk/kdir/android13-5.15
-CLANG=/home/fanziyun/ddk-android13-5.15-20260313/opt/ddk/clang/clang-r450784e/bin
-
-rm -rf "$OUT"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+KDIR="${1:?usage: build_sched_assist.sh KDIR CLANG_BIN [OUT] [KERNEL_SRC] [UPSTREAM]}"
+CLANG_BIN="${2:?missing matching clang bin directory}"
+OUT="${3:-$REPO/out/build/ux_min}"
+KSRC="${SAILBOAT_KERNEL_SRC:-${4:-$KDIR}}"
+UPSTREAM="${5:-$REPO/src_upstream/oplus_sm8550}"
+[ -f "$KDIR/Makefile" ] && [ -f "$KDIR/Module.symvers" ] && [ -f "$KDIR/.config" ] || {
+  printf 'missing prepared kernel directory, config or Module.symvers\n' >&2; exit 1;
+}
+[ -f "$KSRC/include/trace/hooks/sched.h" ] || { printf 'pass the matching kernel source directory\n' >&2; exit 1; }
+[ -x "$CLANG_BIN/clang" ] || { printf 'missing clang\n' >&2; exit 1; }
+case "$OUT" in "$REPO"/out/*) ;; *) printf 'OUT must be inside repo out/\n' >&2; exit 1 ;; esac
+[ ! -e "$OUT/Makefile" ] || { printf 'use a fresh output directory\n' >&2; exit 1; }
 mkdir -p "$OUT"
-cp "$SRC"/sched_assist/*.c "$SRC"/sched_assist/*.h "$OUT"/
-cp "$SRC"/frame_boost/frame_boost_V1/frame_group.h "$OUT"/frame_group.h
-cp "$REPO"/port/sched_assist/src/*.c "$REPO"/port/sched_assist/src/*.h "$OUT"/
-
-python3 - "$OUT" <<'PY'
+SRC="$UPSTREAM/vendor/oplus/kernel/cpu/sched"
+SHA="$(python3 -I "$REPO/scripts/adapt_sched_assist.py" --verify-upstream "$UPSTREAM")"
+cp "$SRC"/sched_assist/*.[ch] "$OUT"/
+cp "$SRC/frame_boost/frame_boost_V1/frame_group.h" "$OUT"/frame_group.h
+mode="${SAILBOAT_BUILTIN_CHECK:-0}"
+adapt_args=()
+case "$mode" in
+  0) ;;
+  1) adapt_args=(--builtin) ;;
+  *) printf 'SAILBOAT_BUILTIN_CHECK must be 0 or 1\n' >&2; exit 1 ;;
+esac
+python3 -I "$REPO/scripts/adapt_sched_assist.py" --out-dir "$OUT" \
+  --port-dir "$REPO/port/sched_assist/src" --kernel-dir "$KSRC" \
+  --config "$KDIR/.config" --source-sha "$SHA" "${adapt_args[@]}"
+export PATH="$CLANG_BIN:$PATH"
+if [ "$mode" = 1 ]; then
+  make -C "$KDIR" M="$OUT" ARCH=arm64 LLVM=1 PAHOLE=true \
+    CONFIG_OPLUS_SCHED_ASSIST=y KBUILD_BUILTIN=1 KBUILD_MODULES= built-in.a
+  "$CLANG_BIN/llvm-nm" "$OUT/built-in.a" > "$OUT/builtin-symbols.txt"
+  cp "$KDIR/.config" "$OUT/build.config"
+  sha256sum "$OUT/built-in.a" "$OUT/build.config" > "$OUT/sha256.txt"
+  printf 'builtin_object_check=%s; not a boot image\n' "$OUT/built-in.a"
+else
+  modpost_args=()
+  if [ -n "${SAILBOAT_MODPOST:-}" ]; then
+    [ -x "$SAILBOAT_MODPOST" ] || { printf 'missing strict modpost executable\n' >&2; exit 1; }
+    printf -v modpost_command '%q -m -E -e -i %q -o %q' \
+      "$SAILBOAT_MODPOST" "$KDIR/Module.symvers" "$OUT/Module.symvers"
+    modpost_args=("MODPOST=$modpost_command")
+  fi
+  make -C "$KDIR" M="$OUT" ARCH=arm64 LLVM=1 PAHOLE=true "${modpost_args[@]}" modules
+  "$CLANG_BIN/llvm-nm" -u "$OUT/sail_sched_assist.ko" > "$OUT/imports.txt"
+  python3 -I - "$OUT/sail_sched_assist.mod.c" "$KDIR/Module.symvers" "$OUT/imports.txt" <<'PY'
 import pathlib
+import re
 import sys
-
-out = pathlib.Path(sys.argv[1])
-
-def sub(path, old, new):
-    p = out / path
-    text = p.read_text()
-    if old not in text:
-        raise SystemExit(f"anchor not found in {path}: {old!r}")
-    p.write_text(text.replace(old, new, 1))
-
-sub("sa_common.c",
-    "#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>",
-    "#include \"frame_group.h\"")
-sub("sa_fair.c",
-    "#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>",
-    "#include \"frame_group.h\"")
-sub("sa_common.h", "#define OTS_IDX\t\t\t0", "#define OTS_IDX\t\t\t2")
-sub("sa_sysfs.c",
-    "#include \"sa_sysfs.h\"",
-    "#include \"sa_sysfs.h\"\n#include \"sailboat_coloros_nodes.h\"")
-sub("sa_sysfs.c",
-    "\tgoto err_creat_d_sched_assist;\n\t}\n",
-    "\tgoto err_creat_d_sched_assist;\n\t}\n\n"
-    "\tsailboat_coloros_nodes_proc_init(d_sched_assist);\n")
+text = pathlib.Path(sys.argv[1]).read_text()
+versions = re.search(r'____versions\[\].*?=\s*\{(.*?)\};', text, re.S)
+if not versions:
+    raise SystemExit('missing symbol version table')
+entries = {name: int(crc, 16) for crc, name in re.findall(r'\{\s*(0x[0-9a-fA-F]+),\s*"([^"]+)"\s*\}', versions[1])}
+expected = {}
+for line in pathlib.Path(sys.argv[2]).read_text().splitlines():
+    fields = line.split()
+    if len(fields) >= 2:
+        expected[fields[1]] = int(fields[0], 16)
+imports = {line.split()[-1] for line in pathlib.Path(sys.argv[3]).read_text().splitlines() if re.search(r'\bU\s+\S+$', line)}
+required = imports | {'module_layout'}
+missing = required - entries.keys()
+bad = {name for name, crc in entries.items() if expected.get(name) != crc}
+if missing or bad:
+    raise SystemExit(f'invalid symbol CRC table: missing={sorted(missing)} mismatched={sorted(bad)}')
+print(f'{len(entries)} symbol CRCs match the build kernel; {len(imports)} strong imports covered')
 PY
-
-cat > "$OUT/Makefile" <<'EOF'
-obj-m += sail_sched_assist.o
-
-sail_sched_assist-y += sched_assist.o
-sail_sched_assist-y += sa_common.o
-sail_sched_assist-y += sa_oemdata.o
-sail_sched_assist-y += sa_sysfs.o
-sail_sched_assist-y += sa_priority.o
-sail_sched_assist-y += sa_fair.o
-sail_sched_assist-y += sa_exec.o
-sail_sched_assist-y += sa_jankinfo.o
-sail_sched_assist-y += sailboat_coloros_nodes.o
-
-ccflags-y += -I$(srctree)/ -I$(srctree)/kernel/sched -I$(src)
-EOF
-
-export PATH="$CLANG:$PATH"
-make -C "$KDIR" M="$OUT" ARCH=arm64 LLVM=1 PAHOLE=true modules
+  "$CLANG_BIN/llvm-readelf" -h "$OUT/sail_sched_assist.ko" > "$OUT/elf-header.txt"
+  "$CLANG_BIN/llvm-readelf" -p .modinfo "$OUT/sail_sched_assist.ko" > "$OUT/modinfo.txt"
+  cp "$KDIR/.config" "$OUT/build.config"
+  sha256sum "$OUT/sail_sched_assist.ko" "$OUT/build.config" > "$OUT/sha256.txt"
+  printf 'build_only=%s; init refuses MODULE loading; do not install\n' "$OUT/sail_sched_assist.ko"
+fi

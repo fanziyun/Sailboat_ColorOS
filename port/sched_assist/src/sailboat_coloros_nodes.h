@@ -6,5 +6,6 @@
 struct proc_dir_entry;
 
 int sailboat_coloros_nodes_proc_init(struct proc_dir_entry *parent);
+int sailboat_coloros_settings_disabled(void);
 
 #endif
