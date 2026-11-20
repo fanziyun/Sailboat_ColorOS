@@ -101,3 +101,12 @@ KSU `Sail_UX` 包已更新为匹配本内核的 `target_release/notes_sha256/ko_
 
 - `out/build/animation_v1_20261121_05/`：159 个版本 CRC 全匹配，vermagic `5.15.225ColorOS`，sha256 `e01aa817…`。
 - 刷入 `Sail_UX` 包后重启，`uxctl.sh load` 自动加载；未手工 insmod 时读到 `enabled=1`、`frame_boost_enabled=1`，说明默认开启生效。
+
+## 内建内核部署（2026-11-21）
+
+ABK run `44832020536`（builtin 形态，参数取自 run `44683587474`）构建的 `5.15.225-Sailboat-ColorOS-20261121` 已刷入 `boot_a`：写入前备份 `/data/local/tmp/boot_a_pre_20261121_builtin.img`（md5 `bb420dd8…`），写入后前 64 MiB 摘要 `d914424f…` 与本地镜像一致。
+
+- Image 内 `CONFIG_OPLUS_SCHED_ASSIST=y`，含 `oplus_frame_boost`、`sailboat_coloros_animation`、`sailboat_coloros_fbg_launch_boost` 字符串；启动日志 `sailboat_coloros_animation_v1: ready, default enabled`。
+- 重启后 `uname -r=5.15.225-Sailboat-ColorOS-20261121`，KernelSU 3.3.1 root 保留（`uid=0`、`u:r:ksu:s0`）；无 `sailboat_sched_assist` 模块，`sched_assist_enabled=1`、`frame_boost_enabled=1`，`frame_group_adopts=1`、`frame_launch_boosts=2`。
+- 本轮未做流畅度 A/B；此前 human 快速切换的 P2P 差异仍在噪声内，未宣称收益。
+- KSU `Sail_UX` 包保留在设备上不会覆盖内建实现：`uxctl.sh load` 检测到已有 sched_assist 会拒绝加载。
